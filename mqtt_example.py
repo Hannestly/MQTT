@@ -1,6 +1,7 @@
 import paho.mqtt.client as mqtt
 import time
 import threading
+import json
 
 # MQTT Broker Settings
 BROKER_ADDRESS = "localhost"
@@ -12,7 +13,11 @@ KEEPALIVE = 60
 def on_connect(client, userdata, flags, rc):
     if rc == 0:
         print("Connected to MQTT Broker!")
-        client.subscribe("test/topic")
+        # Subscribe to relevant topics
+        client.subscribe("client/+/registered")
+        client.subscribe("task/+/ack")
+        client.subscribe("client/+/task")
+        client.subscribe("system/schedule_history")
     else:
         print(f"Connection failed with code {rc}")
 
@@ -45,35 +50,79 @@ def setup_client(client_id):
         return None
 
 
-# Publisher function
+# Publisher function - now sends task-related messages
 def publisher():
-    pub_client = setup_client("publisher_1")
+    pub_client = setup_client("test_client_1")
     if pub_client:
         pub_client.loop_start()
-        count = 0
-        while True:
-            message = f"Test message {count}"
-            result = pub_client.publish("test/topic", message, qos=1)
-            print(f"Publishing: {message}")
-            count += 1
-            time.sleep(2)  # Publish every 2 seconds
+        
+        # First register the client
+        pub_client.publish("client/register", 
+            json.dumps({"client_id": "test_client_1"}))
+        time.sleep(1)  # Wait for registration
+        
+        # Request schedule history before starting tasks
+        pub_client.publish("system/control", 
+            json.dumps({"command": "get_schedule_history"}))
+        
+        # Submit test tasks
+        for i in range(5):
+            # Submit task
+            task = {
+                "task_id": f"task_{i}",
+                "client_id": "test_client_1",
+                "computation_time": 1,
+                "period": 5,
+                "deadline": 5,
+                "scheduling": "RM"  # Try with "RM", "EDF", or "RR"
+            }
+            pub_client.publish("task/submit", json.dumps(task))
+            print(f"Submitting task_{i}")
+            
+            # Simulate task completion after 2 seconds
+            time.sleep(2)
+            status = {
+                "task_id": f"task_{i}",
+                "client_id": "test_client_1",
+                "status": "completed",
+                "response_time": 1.5,
+                "algorithm": "RM"
+            }
+            pub_client.publish("task/status", json.dumps(status))
+            print(f"Completing task_{i}")
+            
+            # Request updated schedule history after each task
+            pub_client.publish("system/control", 
+                json.dumps({"command": "get_schedule_history"}))
+            
+            time.sleep(1)  # Wait before next task
+            
+        # Request final schedule history
+        pub_client.publish("system/control", 
+            json.dumps({"command": "get_schedule_history"}))
+        time.sleep(1)  # Wait for final history
+        
         pub_client.loop_stop()
 
 
-# Subscriber function
+# Subscriber function - monitors responses
 def subscriber():
-    sub_client = setup_client("subscriber_1")
+    sub_client = setup_client("monitor_client_1")
     if sub_client:
         sub_client.loop_forever()  # Keeps subscriber running
 
 
 # Main execution
 if __name__ == "__main__":
-
+    print("Starting test client...")
+    print("Will send 5 tasks and then exit in 10 seconds...")
+    
     # Start publisher in a separate thread
     pub_thread = threading.Thread(target=publisher)
     pub_thread.daemon = True
     pub_thread.start()
 
-    # Start subscriber in the main thread
-    subscriber()
+    # Give enough time for tasks to complete
+    time.sleep(20)  # Wait for all 5 tasks (each takes ~3 seconds) plus some buffer
+    print("All tasks completed, shutting down...")
+    exit(0)
