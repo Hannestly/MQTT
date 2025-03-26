@@ -40,18 +40,65 @@ class TaskScheduler:
         if not self.tasks:
             return None
 
-        # Get the task with the highest priority (smallest period)
-        _, task = heapq.heappop(self.tasks)
-        return task
+        # Find task with shortest period (highest priority)
+        current_time = time.time()
+        valid_tasks = []
+        
+        # Check all tasks and keep only those that are ready to run
+        while self.tasks:
+            priority, task = heapq.heappop(self.tasks)
+            if current_time >= task["arrival_time"]:
+                valid_tasks.append((priority, task))
+                
+        if not valid_tasks:
+            # Push back tasks and return None if no valid tasks
+            for task in valid_tasks:
+                heapq.heappush(self.tasks, task)
+            return None
+            
+        # Get task with shortest period
+        selected_task = min(valid_tasks, key=lambda x: x[1]["period"])
+        
+        # Push back unselected tasks
+        for task in valid_tasks:
+            if task != selected_task:
+                heapq.heappush(self.tasks, task)
+                
+        return selected_task[1]
 
     def earliest_deadline_first(self):
         """Earliest Deadline First scheduling algorithm"""
         if not self.tasks:
             return None
 
-        # Get the task with the earliest deadline
-        _, task = heapq.heappop(self.tasks)
-        return task
+        # Find task with earliest absolute deadline
+        current_time = time.time()
+        valid_tasks = []
+        
+        # Check all tasks and keep only those that are ready to run
+        while self.tasks:
+            priority, task = heapq.heappop(self.tasks)
+            if current_time >= task["arrival_time"]:
+                # Calculate absolute deadline
+                abs_deadline = task["arrival_time"] + task["deadline"]
+                if current_time <= abs_deadline:
+                    valid_tasks.append((priority, task))
+                    
+        if not valid_tasks:
+            # Push back tasks and return None if no valid tasks
+            for task in valid_tasks:
+                heapq.heappush(self.tasks, task)
+            return None
+            
+        # Get task with earliest deadline
+        selected_task = min(valid_tasks, key=lambda x: x[1]["arrival_time"] + x[1]["deadline"])
+        
+        # Push back unselected tasks
+        for task in valid_tasks:
+            if task != selected_task:
+                heapq.heappush(self.tasks, task)
+                
+        return selected_task[1]
 
     def round_robin(self):
         """Round Robin scheduling algorithm"""
