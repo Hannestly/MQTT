@@ -11,7 +11,6 @@ class TaskGenerator:
         self.broker_host = broker_host
         self.broker_port = broker_port
         self.mqtt_client = mqtt.Client(client_id="task_generator")
-        self.task_counter = 0
         self.results = []
 
         # Setup MQTT callbacks
@@ -106,11 +105,19 @@ class TaskGenerator:
 
         return tasks
 
-    def submit_tasks(self, tasks):
+    def submit_tasks(self, task_set):
         """Submit tasks to the broker"""
+        # Get the scheduling algorithm from the task set
+        scheduling = task_set.get("scheduling", "RM")
+        tasks = task_set.get("tasks", [])
+
         for task in tasks:
-            self.mqtt_client.publish("task/submit", json.dumps(task))
-            print(f"Submitted task {task['task_id']} to client {task['client_id']}")
+            task_data = {
+                "scheduling": scheduling,
+                "tasks": [task]  # Send one task at a time
+            }
+            self.mqtt_client.publish("task/submit", json.dumps(task_data))
+            print(f"Submitted task {task['task_id']} with {scheduling} scheduling")
             time.sleep(0.5)  # Space out task submissions
 
     def get_results(self):
@@ -152,6 +159,28 @@ class TaskGenerator:
                 f"  Avg response: {sum(t['response_time'] for t in tasks)/total:.2f}s"
             )
 
+    def load_task_sets(self, filename="task_sets.json"):
+        """Load task sets from JSON file"""
+        try:
+            with open(filename, 'r') as f:
+                task_sets = json.load(f)
+            return task_sets
+        except FileNotFoundError:
+            print(f"Error: {filename} not found")
+            return None
+        except json.JSONDecodeError:
+            print(f"Error: {filename} contains invalid JSON")
+            return None
+
+    def get_task_set_type_name(self, set_type):
+        """Convert set type number to corresponding JSON key"""
+        type_mapping = {
+            1: "harmonic_sets",
+            2: "tight_deadline_sets",
+            3: "equal_period_sets"
+        }
+        return type_mapping.get(set_type)
+
 
 if __name__ == "__main__":
     generator = TaskGenerator()
@@ -160,23 +189,64 @@ if __name__ == "__main__":
     try:
         while True:
             print("\nOptions:")
-            print("1. Generate harmonic period tasks (RM)")
-            print("2. Generate short deadline tasks (EDF)")
-            print("3. Generate equal period tasks (RR)")
+            print("1. Submit harmonic task set (RM)")
+            print("2. Submit tight deadline task set (EDF)")
+            print("3. Submit equal period task set (RR)")
             print("4. Analyze results")
             print("5. Exit")
 
             choice = input("Enter choice: ")
 
+            task_sets = generator.load_task_sets()
+            if not task_sets:
+                print("No task sets found")
+                continue
+
             if choice == "1":
-                tasks = generator.generate_task_set(1, "embedded_1")
-                generator.submit_tasks(tasks)
+                print("\nAvailable harmonic task sets:")
+                for i, task_set in enumerate(task_sets["harmonic_sets"]):
+                    print(f"{i + 1}. Task set with {len(task_set['tasks'])} tasks ({task_set['scheduling']})")
+                
+                set_choice = input("Select task set number: ")
+                try:
+                    set_index = int(set_choice) - 1
+                    if 0 <= set_index < len(task_sets["harmonic_sets"]):
+                        generator.submit_tasks(task_sets["harmonic_sets"][set_index])
+                    else:
+                        print("Invalid task set number")
+                except ValueError:
+                    print("Invalid input")
+
             elif choice == "2":
-                tasks = generator.generate_task_set(2, "embedded_1")
-                generator.submit_tasks(tasks)
+                print("\nAvailable tight deadline task sets:")
+                for i, task_set in enumerate(task_sets["tight_deadline_sets"]):
+                    print(f"{i + 1}. Task set with {len(task_set['tasks'])} tasks ({task_set['scheduling']})")
+                
+                set_choice = input("Select task set number: ")
+                try:
+                    set_index = int(set_choice) - 1
+                    if 0 <= set_index < len(task_sets["tight_deadline_sets"]):
+                        generator.submit_tasks(task_sets["tight_deadline_sets"][set_index])
+                    else:
+                        print("Invalid task set number")
+                except ValueError:
+                    print("Invalid input")
+
             elif choice == "3":
-                tasks = generator.generate_task_set(3, "embedded_1")
-                generator.submit_tasks(tasks)
+                print("\nAvailable equal period task sets:")
+                for i, task_set in enumerate(task_sets["equal_period_sets"]):
+                    print(f"{i + 1}. Task set with {len(task_set['tasks'])} tasks ({task_set['scheduling']})")
+                
+                set_choice = input("Select task set number: ")
+                try:
+                    set_index = int(set_choice) - 1
+                    if 0 <= set_index < len(task_sets["equal_period_sets"]):
+                        generator.submit_tasks(task_sets["equal_period_sets"][set_index])
+                    else:
+                        print("Invalid task set number")
+                except ValueError:
+                    print("Invalid input")
+
             elif choice == "4":
                 generator.analyze_results()
             elif choice == "5":

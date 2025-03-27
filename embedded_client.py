@@ -4,6 +4,7 @@ import time
 import json
 import threading
 from collections import deque
+import random
 
 
 class EmbeddedClient:
@@ -24,8 +25,8 @@ class EmbeddedClient:
 
     def on_connect(self, client, userdata, flags, rc):
         print(f"Client {self.client_id} connected with result code {rc}")
-        # Subscribe to relevant topics
-        client.subscribe(f"client/{self.client_id}/task")
+        # Subscribe to task execution topic
+        client.subscribe("task/execute")  # Changed from client-specific topic
         client.subscribe("system/control")
 
         # Register with the broker
@@ -44,7 +45,7 @@ class EmbeddedClient:
             print(f"Invalid JSON received on {topic}")
             return
 
-        if topic == f"client/{self.client_id}/task":
+        if topic == "task/execute":  # Changed from client-specific topic
             self.handle_task_assignment(data)
         elif topic == "system/control":
             self.handle_system_control(data)
@@ -52,18 +53,18 @@ class EmbeddedClient:
     def handle_task_assignment(self, data):
         """Handle new task assignment from broker"""
         task_id = data.get("task_id")
-        computation_time = data.get("computation_time", 1)
+        execution_time = data.get("execution_time", 1)  # Changed from computation_time
         deadline = data.get("deadline", 5)
         algorithm = data.get("algorithm", "RM")
 
         print(
-            f"New task received: {task_id} (CT: {computation_time}, DL: {deadline}, ALG: {algorithm})"
+            f"New task received: {task_id} (ET: {execution_time}, DL: {deadline}, ALG: {algorithm})"
         )
 
         # Add task to queue
         task = {
             "task_id": task_id,
-            "computation_time": computation_time,
+            "execution_time": execution_time,
             "deadline": deadline,
             "algorithm": algorithm,
             "arrival_time": time.time(),
@@ -106,8 +107,15 @@ class EmbeddedClient:
 
                 print(f"Starting task {self.current_task['task_id']}")
 
-                # Simulate task execution
-                time.sleep(self.current_task["computation_time"])
+                # Calculate execution time with random delay
+                base_execution_time = self.current_task["execution_time"]
+                random_delay = random.uniform(0, 1)  # Random delay between 0 and 1 second
+                total_execution_time = base_execution_time + random_delay
+
+                print(f"Executing for {total_execution_time:.2f} seconds (base: {base_execution_time}s, delay: {random_delay:.2f}s)")
+                
+                # Simulate task execution with random delay
+                time.sleep(total_execution_time)
 
                 # Task completed
                 completion_time = time.time()
@@ -121,6 +129,9 @@ class EmbeddedClient:
                     "task_id": self.current_task["task_id"],
                     "start_time": self.task_start_time,
                     "completion_time": completion_time,
+                    "actual_execution_time": total_execution_time,
+                    "base_execution_time": base_execution_time,
+                    "random_delay": random_delay,
                     "response_time": response_time,
                     "deadline_met": deadline_met,
                     "algorithm": self.current_task["algorithm"],
@@ -130,17 +141,16 @@ class EmbeddedClient:
                 # Send status update to broker
                 self.mqtt_client.publish(
                     "task/status",
-                    json.dumps(
-                        {
-                            "task_id": self.current_task["task_id"],
-                            "client_id": self.client_id,
-                            "status": (
-                                "completed" if deadline_met else "missed_deadline"
-                            ),
-                            "response_time": response_time,
-                            "timestamp": completion_time,
-                        }
-                    ),
+                    json.dumps({
+                        "task_id": self.current_task["task_id"],
+                        "client_id": self.client_id,
+                        "status": "completed" if deadline_met else "missed_deadline",
+                        "response_time": response_time,
+                        "actual_execution_time": total_execution_time,
+                        "base_execution_time": base_execution_time,
+                        "random_delay": random_delay,
+                        "timestamp": completion_time,
+                    })
                 )
 
                 self.current_task = None

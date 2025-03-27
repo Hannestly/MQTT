@@ -196,35 +196,52 @@ class MQTTBroker:
 
     def handle_task_submission(self, data):
         """Handle new task submission"""
-        task_id = data.get("task_id")
-        client_id = data.get("client_id")
-        scheduling = data.get("scheduling", "RM")  # Default to Rate Monotonic
+        try:
+            # Ensure data is a dictionary if it's a string
+            if isinstance(data, str):
+                data = json.loads(data)
+            
+            # Extract scheduling algorithm from the task set
+            scheduling = data.get("scheduling", "RM")  # Default to Rate Monotonic
+            tasks = data.get("tasks", [])
 
-        if not task_id or not client_id:
-            print("Invalid task submission - missing task_id or client_id")
-            return
+            if not tasks:
+                print("Invalid task submission - no tasks provided")
+                return
 
-        # Add task to scheduler
-        task = {
-            "task_id": task_id,
-            "client_id": client_id,
-            "arrival_time": time.time(),
-            "computation_time": data.get("computation_time", 1),
-            "period": data.get("period", 5),
-            "deadline": data.get("deadline", data.get("period", 5)),
-            "scheduling": scheduling,
-        }
+            # Process each task in the task set
+            for task in tasks:
+                task_id = task.get("task_id")
+                if not task_id:
+                    print("Invalid task - missing task_id")
+                    continue
 
-        self.task_scheduler.add_task(task)
-        print(f"Task {task_id} from client {client_id} added to scheduler")
+                # Create task object with the new structure
+                scheduled_task = {
+                    "task_id": task_id,
+                    "arrival_time": time.time(),
+                    "computation_time": task.get("execution_time", 1),
+                    "period": task.get("period", 5),
+                    "deadline": task.get("deadline", task.get("period", 5)),
+                    "scheduling": scheduling  # Using scheduling from task set level
+                }
 
-        # Acknowledge task submission
-        self.client.publish(
-            f"task/{task_id}/ack",
-            json.dumps(
-                {"task_id": task_id, "status": "scheduled", "timestamp": time.time()}
-            ),
-        )
+                self.task_scheduler.add_task(scheduled_task)
+                print(f"Task {task_id} added to scheduler with {scheduling} scheduling")
+
+                # Acknowledge task submission
+                self.client.publish(
+                    f"task/{task_id}/ack",
+                    json.dumps({
+                        "task_id": task_id,
+                        "status": "scheduled",
+                        "timestamp": time.time()
+                    })
+                )
+        except json.JSONDecodeError as e:
+            print(f"Error parsing task submission data: {e}")
+        except Exception as e:
+            print(f"Error handling task submission: {e}")
 
     def handle_task_status(self, data):
         """Handle task status updates"""
@@ -281,25 +298,21 @@ class MQTTBroker:
         """Continuous scheduling loop"""
         while True:
             # Check for tasks to schedule
-            for client_id in self.clients:
-                # Get the next task for each scheduling algorithm
-                for algorithm in ["RM", "EDF", "RR"]:
-                    task = self.task_scheduler.schedule(algorithm)
-                    if task and task["client_id"] == client_id:
-                        # Send task to client
-                        self.client.publish(
-                            f"client/{client_id}/task",
-                            json.dumps(
-                                {
-                                    "task_id": task["task_id"],
-                                    "computation_time": task["computation_time"],
-                                    "deadline": task["deadline"],
-                                    "algorithm": algorithm,
-                                    "timestamp": time.time(),
-                                }
-                            ),
-                        )
-            time.sleep(0.1)  # Prevent busy waiting
+            for algorithm in ["RM", "EDF", "RR"]:
+                task = self.task_scheduler.schedule(algorithm)
+                if task:
+                    # Send task to client
+                    self.client.publish(
+                        "task/execute",  # Changed to a general execution topic
+                        json.dumps({
+                            "task_id": task["task_id"],
+                            "execution_time": task["computation_time"],  # Changed to match new structure
+                            "deadline": task["deadline"],
+                            "algorithm": task["scheduling"],
+                            "timestamp": time.time()
+                        })
+                    )
+                time.sleep(0.1)  # Prevent busy waiting
 
 
 if __name__ == "__main__":

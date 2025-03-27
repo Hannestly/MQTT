@@ -1,0 +1,323 @@
+{
+    "harmonic_sets": [
+        {
+            "scheduling": "RM",
+            "tasks": [
+                {
+                    "task_id": "T0",
+                    "execution_time": 4.820453913056868,
+                    "period": 16,
+                    "deadline": 16
+                },
+                {
+                    "task_id": "T1",
+                    "execution_time": 1.0930337895938635,
+                    "period": 4,
+                    "deadline": 4
+                },
+                {
+                    "task_id": "T2",
+                    "execution_time": 1.4902099081720497,
+                    "period": 4,
+                    "deadline": 4
+                },
+                {
+                    "task_id": "T3",
+                    "execution_time": 3.192276420647498,
+                    "period": 8,
+                    "deadline": 8
+                },
+                {
+                    "task_id": "T4",
+                    "execution_time": 0.1537606082776847,
+                    "period": 2,
+                    "deadline": 2
+                }
+            ]
+        },
+        {
+            "scheduling": "RM",
+            "tasks": [
+                {
+                    "task_id": "T15",
+                    "execution_time": 0.22093061857854607,
+                    "period": 2,
+                    "deadline": 2
+                },
+                {
+                    "task_id": "T16",
+                    "execution_time": 1.2962252884949759,
+                    "period": 4,
+                    "deadline": 4
+                },
+                {
+                    "task_id": "T17",
+                    "execution_time": 3.638748199972323,
+                    "period": 8,
+                    "deadline": 8
+                },
+                {
+                    "task_id": "T18",
+                    "execution_time": 0.6847440848660304,
+                    "period": 2,
+                    "deadline": 2
+                },
+                {
+                    "task_id": "T19",
+                    "execution_time": 0.13949149938698763,
+                    "period": 4,
+                    "deadline": 4
+                }
+            ]
+        },
+        {
+            "scheduling": "RM",
+            "tasks": [
+                {
+                    "task_id": "T30",
+                    "execution_time": 5.801540707003226,
+                    "period": 16,
+                    "deadline": 16
+                },
+                {
+                    "task_id": "T31",
+                    "execution_time": 0.4920144423299436,
+                    "period": 2,
+                    "deadline": 2
+                },
+                {
+                    "task_id": "T32",
+                    "execution_time": 2.0179653876649226,
+                    "period": 16,
+                    "deadline": 16
+                },
+                {
+                    "task_id": "T33",
+                    "execution_time": 2.1531712603627873,
+                    "period": 16,
+                    "deadline": 16
+                },
+                {
+                    "task_id": "T34",
+                    "execution_time": 2.745738779355177,
+                    "period": 8,
+                    "deadline": 8
+                }
+            ]
+        }
+    ],
+    "tight_deadline_sets": [
+        {
+            "scheduling": "EDF",
+            "tasks": [
+                {
+                    "task_id": "T5",
+                    "execution_time": 1.6050071534657921,
+                    "period": 7.283867965633249,
+                    "deadline": 2.5094371272829488
+                },
+                {
+                    "task_id": "T6",
+                    "execution_time": 0.8690878856875438,
+                    "period": 6.9266306847181225,
+                    "deadline": 2.4835600697868863
+                },
+                {
+                    "task_id": "T7",
+                    "execution_time": 1.0334162826619568,
+                    "period": 5.653216941218357,
+                    "deadline": 2.0169052284395543
+                },
+                {
+                    "task_id": "T8",
+                    "execution_time": 1.8569567037622787,
+                    "period": 8.143642898084181,
+                    "deadline": 2.805690957972245
+                },
+                {
+                    "task_id": "T9",
+                    "execution_time": 1.6419692965052843,
+                    "period": 5.323889918421196,
+                    "deadline": 1.507816603909055
+                }
+            ]
+        },
+        {
+            "scheduling": "EDF",
+            "tasks": [
+                {
+                    "task_id": "T20",
+                    "execution_time": 1.529284841874802,
+                    "period": 5.449291239296704,
+                    "deadline": 2.3239792156874843
+                },
+                {
+                    "task_id": "T21",
+                    "execution_time": 1.6837802237942987,
+                    "period": 8.866582157281021,
+                    "deadline": 2.8055373105603874
+                },
+                {
+                    "task_id": "T22",
+                    "execution_time": 0.9329820096917565,
+                    "period": 9.994547562710359,
+                    "deadline": 1.863985861751038
+                },
+                {
+                    "task_id": "T23",
+                    "execution_time": 0.9768902209592885,
+                    "period": 6.528914997234011,
+                    "deadline": 2.036110502003627
+                },
+                {
+                    "task_id": "T24",
+                    "execution_time": 1.518278589442642,
+                    "period": 8.506839756517921,
+                    "deadline": 1.018630405078825
+                }
+            ]
+        },
+        {
+            "scheduling": "EDF",
+            "tasks": [
+                {
+                    "task_id": "T35",
+                    "execution_time": 1.4710617467874842,
+                    "period": 9.090159137917663,
+                    "deadline": 1.572974964501788
+                },
+                {
+                    "task_id": "T36",
+                    "execution_time": 1.863177028447418,
+                    "period": 8.819708325204688,
+                    "deadline": 1.3237222684649805
+                },
+                {
+                    "task_id": "T37",
+                    "execution_time": 1.30785834725899,
+                    "period": 9.208625000662398,
+                    "deadline": 1.600312595997196
+                },
+                {
+                    "task_id": "T38",
+                    "execution_time": 1.213636528792705,
+                    "period": 7.94447688007553,
+                    "deadline": 1.6320577014153366
+                },
+                {
+                    "task_id": "T39",
+                    "execution_time": 1.2523426586989437,
+                    "period": 8.702838728734344,
+                    "deadline": 1.7570308837565214
+                }
+            ]
+        }
+    ],
+    "equal_period_sets": [
+        {
+            "scheduling": "RR",
+            "tasks": [
+                {
+                    "task_id": "T10",
+                    "execution_time": 1,
+                    "period": 5,
+                    "deadline": 5
+                },
+                {
+                    "task_id": "T11",
+                    "execution_time": 1,
+                    "period": 5,
+                    "deadline": 5
+                },
+                {
+                    "task_id": "T12",
+                    "execution_time": 1,
+                    "period": 5,
+                    "deadline": 5
+                },
+                {
+                    "task_id": "T13",
+                    "execution_time": 1,
+                    "period": 5,
+                    "deadline": 5
+                },
+                {
+                    "task_id": "T14",
+                    "execution_time": 1,
+                    "period": 5,
+                    "deadline": 5
+                }
+            ]
+        },
+        {
+            "scheduling": "RR",
+            "tasks": [
+                {
+                    "task_id": "T25",
+                    "execution_time": 1,
+                    "period": 5,
+                    "deadline": 5
+                },
+                {
+                    "task_id": "T26",
+                    "execution_time": 1,
+                    "period": 5,
+                    "deadline": 5
+                },
+                {
+                    "task_id": "T27",
+                    "execution_time": 1,
+                    "period": 5,
+                    "deadline": 5
+                },
+                {
+                    "task_id": "T28",
+                    "execution_time": 1,
+                    "period": 5,
+                    "deadline": 5
+                },
+                {
+                    "task_id": "T29",
+                    "execution_time": 1,
+                    "period": 5,
+                    "deadline": 5
+                }
+            ]
+        },
+        {
+            "scheduling": "RR",
+            "tasks": [
+                {
+                    "task_id": "T40",
+                    "execution_time": 1,
+                    "period": 5,
+                    "deadline": 5
+                },
+                {
+                    "task_id": "T41",
+                    "execution_time": 1,
+                    "period": 5,
+                    "deadline": 5
+                },
+                {
+                    "task_id": "T42",
+                    "execution_time": 1,
+                    "period": 5,
+                    "deadline": 5
+                },
+                {
+                    "task_id": "T43",
+                    "execution_time": 1,
+                    "period": 5,
+                    "deadline": 5
+                },
+                {
+                    "task_id": "T44",
+                    "execution_time": 1,
+                    "period": 5,
+                    "deadline": 5
+                }
+            ]
+        }
+    ]
+}
