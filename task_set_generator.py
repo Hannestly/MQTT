@@ -60,46 +60,106 @@ def generate_equal_period_task_set(count=5, start_task_id=0):
     
     return task_set
 
-def save_task_sets_to_json(filename="task_sets.json", num_sets=3, tasks_per_set=5):
-    """Generate multiple task sets and save them to a JSON file"""
-    task_sets = {
-        "harmonic_sets": [],
-        "tight_deadline_sets": [],
-        "equal_period_sets": []
+def generate_mixed_utilization_set(count=9, start_task_id=0):
+    """Generate tasks with mixed utilization levels"""
+    task_set = {
+        "type": "mixed_utilization",
+        "tasks": []
     }
     
-    task_id_counter = 0
+    utilization_patterns = [
+        (0.2, 4, "light"),    # Light load: 20% utilization, 4s period
+        (0.5, 6, "medium"),   # Medium load: 50% utilization, 6s period
+        (0.8, 8, "heavy")     # Heavy load: 80% utilization, 8s period
+    ]
     
-    # Generate sets for each type
-    for set_num in range(num_sets):
-        # Harmonic sets
-        harmonic_set = generate_harmonic_task_set(
-            count=tasks_per_set,
-            start_task_id=task_id_counter
-        )
-        task_sets["harmonic_sets"].append(harmonic_set)
-        task_id_counter += tasks_per_set
-        
-        # Tight deadline sets
-        tight_deadline_set = generate_tight_deadline_task_set(
-            count=tasks_per_set,
-            start_task_id=task_id_counter
-        )
-        task_sets["tight_deadline_sets"].append(tight_deadline_set)
-        task_id_counter += tasks_per_set
-        
-        # Equal period sets
-        equal_period_set = generate_equal_period_task_set(
-            count=tasks_per_set,
-            start_task_id=task_id_counter
-        )
-        task_sets["equal_period_sets"].append(equal_period_set)
-        task_id_counter += tasks_per_set
+    tasks_per_pattern = count // len(utilization_patterns)
+    
+    for pattern_idx, (utilization, period, load_type) in enumerate(utilization_patterns):
+        for i in range(tasks_per_pattern):
+            execution_time = period * utilization
+            task = {
+                "task_id": f"T{start_task_id + pattern_idx * tasks_per_pattern + i}",
+                "execution_time": execution_time,
+                "period": period,
+                "deadline": period * 0.9,
+                "load_type": load_type
+            }
+            task_set["tasks"].append(task)
+    
+    return task_set
+
+def generate_varying_priority_set(count=9, start_task_id=0):
+    """Generate tasks with varying priorities"""
+    task_set = {
+        "type": "varying_priority",
+        "tasks": []
+    }
+    
+    priority_patterns = [
+        (2, 0.3, "high"),     # High priority: 2s period, 30% utilization
+        (4, 0.4, "medium"),   # Medium priority: 4s period, 40% utilization
+        (8, 0.5, "low")       # Low priority: 8s period, 50% utilization
+    ]
+    
+    tasks_per_pattern = count // len(priority_patterns)
+    
+    for pattern_idx, (period, utilization, priority) in enumerate(priority_patterns):
+        for i in range(tasks_per_pattern):
+            execution_time = period * utilization
+            task = {
+                "task_id": f"T{start_task_id + pattern_idx * tasks_per_pattern + i}",
+                "execution_time": execution_time,
+                "period": period,
+                "deadline": period * 0.9,
+                "priority": priority
+            }
+            task_set["tasks"].append(task)
+    
+    return task_set
+
+def generate_burst_task_set(count=9, start_task_id=0):
+    """Generate burst tasks"""
+    task_set = {
+        "type": "burst",
+        "tasks": []
+    }
+    
+    burst_patterns = [
+        (0.5, 3, "rapid"),     # Rapid bursts: 0.5s execution, 3s period
+        (2.0, 6, "medium"),    # Medium bursts: 2s execution, 6s period
+        (4.0, 12, "heavy")     # Heavy bursts: 4s execution, 12s period
+    ]
+    
+    tasks_per_pattern = count // len(burst_patterns)
+    
+    for pattern_idx, (execution_time, period, burst_type) in enumerate(burst_patterns):
+        for i in range(tasks_per_pattern):
+            task = {
+                "task_id": f"T{start_task_id + pattern_idx * tasks_per_pattern + i}",
+                "execution_time": execution_time,
+                "period": period,
+                "deadline": period * 0.8,
+                "burst_type": burst_type
+            }
+            task_set["tasks"].append(task)
+    
+    return task_set
+
+def save_task_sets_to_json(filename="task_sets.json", tasks_per_set=9):
+    """Generate one set of each type for testing with different scheduling algorithms"""
+    task_sets = {
+        "task_sets": [
+            generate_mixed_utilization_set(count=tasks_per_set, start_task_id=0),
+            generate_varying_priority_set(count=tasks_per_set, start_task_id=tasks_per_set),
+            generate_burst_task_set(count=tasks_per_set, start_task_id=tasks_per_set*2)
+        ]
+    }
     
     with open(filename, 'w') as f:
         json.dump(task_sets, f, indent=4)
     
-    print(f"Generated {num_sets} sets of each type and saved to {filename}")
+    print(f"Generated task sets for testing with different scheduling algorithms")
 
 if __name__ == "__main__":
     save_task_sets_to_json() 

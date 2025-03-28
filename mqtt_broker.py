@@ -20,9 +20,22 @@ class TaskScheduler:
         self.task_queue = deque()
         self.last_scheduled = None
         self.schedule_history = []
+        self.worker_loads = {
+            "worker_1": 0.0,
+            "worker_2": 0.0,
+            "worker_3": 0.0
+        }
+
+    def get_least_loaded_worker(self):
+        """Return the worker with the lowest current load"""
+        return min(self.worker_loads.items(), key=lambda x: x[1])[0]
+
+    def update_worker_load(self, worker_id, task_load):
+        """Update worker's load based on task execution time"""
+        self.worker_loads[worker_id] = task_load
 
     def add_task(self, task):
-        """Add a new task to the scheduler"""
+        """Add a new task to the scheduler with load balancing consideration"""
         if task["scheduling"] == "RM":
             # For RM, priority is based on period (shorter period = higher priority)
             priority = task["period"]
@@ -33,6 +46,8 @@ class TaskScheduler:
             # For RR, priority isn't used
             priority = 0
 
+        # Add load balancing metadata
+        task["assigned_worker"] = self.get_least_loaded_worker()
         heapq.heappush(self.tasks, (priority, task))
 
     def rate_monotonic(self):
@@ -151,6 +166,12 @@ class MQTTBroker:
         self.clients = set()
         self.task_scheduler = TaskScheduler()
         self.task_status = defaultdict(dict)
+        self.worker_status = {
+            "worker_1": {"active": False, "last_seen": 0, "current_load": 0.0, "heartbeat_count": 0},
+            "worker_2": {"active": False, "last_seen": 0, "current_load": 0.0, "heartbeat_count": 0},
+            "worker_3": {"active": False, "last_seen": 0, "current_load": 0.0, "heartbeat_count": 0}
+        }
+        self.worker_timeout = 5.0  # Time in seconds before marking worker as inactive
 
         # Setup MQTT callbacks
         self.client.on_connect = self.on_connect
@@ -164,49 +185,66 @@ class MQTTBroker:
         client.subscribe("task/submit")
         client.subscribe("task/status")
         client.subscribe("system/control")
+        client.subscribe("worker/heartbeat")
 
     def on_message(self, client, userdata, msg):
         topic = msg.topic
-        payload = msg.payload.decode()
-
         try:
-            data = json.loads(payload)
-        except json.JSONDecodeError:
-            print(f"Invalid JSON received on {topic}")
-            return
-
-        if topic == "client/register":
-            self.handle_client_registration(data)
-        elif topic == "task/submit":
-            self.handle_task_submission(data)
-        elif topic == "task/status":
-            self.handle_task_status(data)
-        elif topic == "system/control":
-            self.handle_system_control(data)
+            if topic == "worker/heartbeat":
+                data = json.loads(msg.payload.decode())
+                worker_id = data.get("worker_id")
+                if worker_id in self.worker_status:
+                    self.worker_status[worker_id]["last_seen"] = time.time()
+                    self.worker_status[worker_id]["current_load"] = data.get("current_load", 0.0)
+                    self.worker_status[worker_id]["heartbeat_count"] += 1
+                    if self.worker_status[worker_id]["heartbeat_count"] % 5 == 0:  # Log every 5th heartbeat
+                        print(f"[HEARTBEAT] {worker_id}: Count={self.worker_status[worker_id]['heartbeat_count']}")
+            elif topic == "client/register":
+                self.handle_client_registration(json.loads(msg.payload.decode()))
+            elif topic == "task/submit":
+                self.handle_task_submission(json.loads(msg.payload.decode()))
+            elif topic == "task/status":
+                self.handle_task_status(json.loads(msg.payload.decode()))
+            elif topic == "system/control":
+                self.handle_system_control(json.loads(msg.payload.decode()))
+        except Exception as e:
+            print(f"Error processing message on {topic}: {e}")
 
     def handle_client_registration(self, data):
-        """Handle new client registration"""
+        """Handle new client (worker) registration"""
         client_id = data.get("client_id")
-        if client_id:
-            self.clients.add(client_id)
-            print(f"Client {client_id} registered")
+        if client_id in self.worker_status:
+            self.worker_status[client_id]["active"] = True
+            self.worker_status[client_id]["last_seen"] = time.time()
+            self.worker_status[client_id]["current_load"] = data.get("current_load", 0.0)
+            self.worker_status[client_id]["heartbeat_count"] = 0  # Add heartbeat counter
+            print(f"\n[WORKER REGISTERED] {client_id}")
+            print(f"  Current load: {self.worker_status[client_id]['current_load']}")
+            
             self.client.publish(
-                f"client/{client_id}/registered", json.dumps({"status": "success"})
+                f"client/{client_id}/registered",
+                json.dumps({
+                    "status": "success",
+                    "timestamp": time.time()
+                })
             )
+            
+            active_workers = [w_id for w_id, status in self.worker_status.items() 
+                             if status["active"]]
+            print(f"  Active workers: {active_workers}")
 
     def handle_task_submission(self, data):
         """Handle new task submission"""
         try:
-            # Ensure data is a dictionary if it's a string
             if isinstance(data, str):
                 data = json.loads(data)
             
             # Extract scheduling algorithm from the task set
-            scheduling = data.get("scheduling", "RM")  # Default to Rate Monotonic
+            scheduling = data.get("scheduling")
             tasks = data.get("tasks", [])
 
-            if not tasks:
-                print("Invalid task submission - no tasks provided")
+            if not tasks or not scheduling:
+                print("Invalid task submission - missing tasks or scheduling algorithm")
                 return
 
             # Process each task in the task set
@@ -223,39 +261,50 @@ class MQTTBroker:
                     "computation_time": task.get("execution_time", 1),
                     "period": task.get("period", 5),
                     "deadline": task.get("deadline", task.get("period", 5)),
-                    "scheduling": scheduling  # Using scheduling from task set level
+                    "scheduling": scheduling,
+                    "load_type": task.get("load_type"),
+                    "priority": task.get("priority"),
+                    "burst_type": task.get("burst_type")
                 }
 
-                self.task_scheduler.add_task(scheduled_task)
-                print(f"Task {task_id} added to scheduler with {scheduling} scheduling")
+                print(f"\n[TASK ARRIVED] Task {task_id}")
+                print(f"  Scheduling: {scheduling}")
+                print(f"  Execution Time: {scheduled_task['computation_time']}")
+                print(f"  Deadline: {scheduled_task['deadline']}")
 
-                # Acknowledge task submission
-                self.client.publish(
-                    f"task/{task_id}/ack",
-                    json.dumps({
-                        "task_id": task_id,
-                        "status": "scheduled",
-                        "timestamp": time.time()
-                    })
-                )
-        except json.JSONDecodeError as e:
-            print(f"Error parsing task submission data: {e}")
+                self.task_scheduler.add_task(scheduled_task)
+
         except Exception as e:
             print(f"Error handling task submission: {e}")
 
     def handle_task_status(self, data):
-        """Handle task status updates"""
+        """Handle task status updates with load balancing metrics"""
         task_id = data.get("task_id")
-        client_id = data.get("client_id")
+        worker_id = data.get("worker_id")
         status = data.get("status")
+        execution_time = data.get("actual_execution_time", 0)
 
-        if task_id and client_id and status:
+        if task_id and worker_id and status:
+            print(f"\n[TASK COMPLETED] Task {task_id}")
+            print(f"  Worker: {worker_id}")
+            print(f"  Status: {status}")
+            print(f"  Execution Time: {execution_time:.2f}s")
+            if status != "completed":
+                print(f"  Note: Deadline missed!")
+
+            # Update task status
             self.task_status[task_id] = {
-                "client_id": client_id,
+                "worker_id": worker_id,
                 "status": status,
+                "execution_time": execution_time,
                 "timestamp": time.time(),
             }
-            print(f"Task {task_id} status updated to {status}")
+
+            # Update worker load
+            if worker_id in self.worker_status:
+                self.worker_status[worker_id]["last_seen"] = time.time()
+                self.worker_status[worker_id]["current_load"] = data.get("current_load", 0.0)
+                self.task_scheduler.update_worker_load(worker_id, data.get("current_load", 0.0))
 
     def handle_system_control(self, data):
         """Handle system control commands"""
@@ -295,24 +344,82 @@ class MQTTBroker:
         self.client.loop_forever()
 
     def run_scheduler(self):
-        """Continuous scheduling loop"""
+        """Continuous scheduling loop with load balancing"""
         while True:
-            # Check for tasks to schedule
-            for algorithm in ["RM", "EDF", "RR"]:
-                task = self.task_scheduler.schedule(algorithm)
-                if task:
-                    # Send task to client
-                    self.client.publish(
-                        "task/execute",  # Changed to a general execution topic
-                        json.dumps({
-                            "task_id": task["task_id"],
-                            "execution_time": task["computation_time"],  # Changed to match new structure
-                            "deadline": task["deadline"],
-                            "algorithm": task["scheduling"],
-                            "timestamp": time.time()
-                        })
-                    )
-                time.sleep(0.1)  # Prevent busy waiting
+            current_time = time.time()
+            
+            # Monitor worker health
+            for worker_id, status in self.worker_status.items():
+                if status["active"]:
+                    time_since_last_seen = current_time - status["last_seen"]
+                    if time_since_last_seen > self.worker_timeout:
+                        status["active"] = False
+                        print(f"\n[WORKER STATUS] Worker {worker_id} marked as inactive")
+                        print(f"  Last seen: {time_since_last_seen:.1f} seconds ago")
+
+            # Process tasks only if there are active workers
+            active_workers = [w_id for w_id, status in self.worker_status.items() 
+                            if status["active"]]
+            
+            if self.task_scheduler.tasks:
+                if not active_workers:
+                    print("\n[SCHEDULER WARNING] No active workers available")
+                    time.sleep(1)  # Wait a bit before checking again
+                    continue
+                
+                # Print active workers when there are tasks to schedule
+                print(f"\n[SCHEDULER STATUS]")
+                print(f"  Active workers: {active_workers}")
+                print(f"  Tasks waiting: {len(self.task_scheduler.tasks)}")
+
+                # Get scheduling algorithm from the first task
+                _, current_task = self.task_scheduler.tasks[0]
+                algorithm = current_task.get("scheduling")
+                
+                if algorithm in self.task_scheduler.scheduling_algorithms:
+                    task = self.task_scheduler.schedule(algorithm)
+                    if task:
+                        worker_id = task["assigned_worker"]
+                        if self.worker_status[worker_id]["active"]:
+                            print(f"\n[TASK ASSIGNED] Task {task['task_id']}")
+                            print(f"  Worker: {worker_id}")
+                            print(f"  Algorithm: {algorithm}")
+                            print(f"  Execution Time: {task['computation_time']}s")
+                            
+                            # Send task to assigned worker
+                            self.client.publish(
+                                f"worker/{worker_id}/task",
+                                json.dumps({
+                                    "task_id": task["task_id"],
+                                    "execution_time": task["computation_time"],
+                                    "deadline": task["deadline"],
+                                    "algorithm": task["scheduling"],
+                                    "load_type": task.get("load_type", "unknown"),
+                                    "priority": task.get("priority", "unknown"),
+                                    "burst_type": task.get("burst_type", "unknown"),
+                                    "timestamp": time.time()
+                                })
+                            )
+                        else:
+                            print(f"\n[SCHEDULER WARNING] Selected worker {worker_id} is not active")
+                    else:
+                        print(f"\n[SCHEDULER WARNING] No task selected by scheduler")
+
+            time.sleep(0.1)
+
+    def get_system_status(self):
+        """Get current system status including load balancing metrics"""
+        return {
+            "workers": self.worker_status,
+            "tasks_pending": len(self.task_scheduler.tasks),
+            "tasks_completed": len([t for t in self.task_status.values() 
+                                  if t["status"] == "completed"]),
+            "load_distribution": {
+                worker_id: status["current_load"]
+                for worker_id, status in self.worker_status.items()
+                if status["active"]
+            }
+        }
 
 
 if __name__ == "__main__":
