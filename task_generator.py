@@ -107,28 +107,41 @@ class TaskGenerator:
         return tasks
 
     def submit_tasks(self, task_set):
-        """Submit tasks to the broker"""
+        """Submit all tasks simultaneously to test scheduling algorithms"""
         scheduling = task_set.get("scheduling", "RM")
         tasks = task_set.get("tasks", [])
 
+        # Add timestamp for all tasks
+        current_time = time.time()
+        task_ids = set()  # Track task IDs to avoid duplicates
+        
+        # Filter out any duplicate task IDs
+        unique_tasks = []
         for task in tasks:
-            task_data = {
-                "scheduling": scheduling,
-                "tasks": [task]
-            }
-            self.mqtt_client.publish("task/submit", json.dumps(task_data))
-            
-            # Enhanced logging based on task type
-            load_info = ""
-            if "load_type" in task:
-                load_info = f" ({task['load_type']} load)"
-            elif "priority" in task:
-                load_info = f" ({task['priority']} priority)"
-            elif "burst_type" in task:
-                load_info = f" ({task['burst_type']} burst)"
-                
-            print(f"Submitted task {task['task_id']}{load_info} with {scheduling} scheduling")
-            time.sleep(0.5)  # Space out task submissions
+            task_id = task.get("task_id")
+            if task_id not in task_ids:
+                task_ids.add(task_id)
+                task["submission_time"] = current_time
+                unique_tasks.append(task)
+            else:
+                print(f"Warning: Skipping duplicate task ID: {task_id}")
+        
+        # Send all tasks in one batch
+        task_data = {
+            "scheduling": scheduling,
+            "tasks": unique_tasks,  # Use only unique tasks
+            "batch_submission": True,
+            "timestamp": current_time
+        }
+        
+        # Publish the entire batch
+        self.mqtt_client.publish("task/submit", json.dumps(task_data))
+        
+        # Log submission information
+        print(f"\n[BATCH SUBMISSION] Sent {len(unique_tasks)} tasks with {scheduling} scheduling")
+        print(f"  Light tasks: {sum(1 for t in unique_tasks if t.get('load_type') == 'light')}")
+        print(f"  Medium tasks: {sum(1 for t in unique_tasks if t.get('load_type') == 'medium')}")
+        print(f"  Heavy tasks: {sum(1 for t in unique_tasks if t.get('load_type') == 'heavy')}")
 
     def get_results(self):
         """Get the task execution results"""
@@ -213,6 +226,69 @@ class TaskGenerator:
             3: "equal_period_sets"
         }
         return type_mapping.get(set_type)
+
+    def generate_mixed_utilization_set(self, count=18, start_task_id=0):
+        """
+        Generate tasks with mixed utilization levels for one-time execution.
+        Removed period field as it's not needed for one-time tasks.
+        """
+        task_set = {
+            "type": "mixed_utilization",
+            "tasks": []
+        }
+        
+        # Define execution time patterns for different load types
+        execution_patterns = [
+            (0.8, "light"),    # Light load: 0.8s execution time
+            (3.0, "medium"),   # Medium load: 3.0s execution time
+            (6.4, "heavy")     # Heavy load: 6.4s execution time
+        ]
+        
+        tasks_per_pattern = count // len(execution_patterns)
+        
+        for pattern_idx, (execution_time, load_type) in enumerate(execution_patterns):
+            for i in range(tasks_per_pattern):
+                # Calculate a reasonable deadline based on execution time
+                deadline = execution_time * 1.5  # 50% margin
+                
+                task = {
+                    "task_id": f"T{start_task_id + pattern_idx * tasks_per_pattern + i}",
+                    "execution_time": execution_time,
+                    "deadline": deadline,
+                    "load_type": load_type
+                }
+                task_set["tasks"].append(task)
+        
+        return task_set
+
+    def generate_rr_task_set(self, count=9, start_task_id=0):
+        """
+        Generate tasks specifically for Round Robin scheduling.
+        Each task should be executed only once.
+        """
+        task_set = {
+            "type": "round_robin",
+            "scheduling": "RR",
+            "tasks": []
+        }
+        
+        # Create a diverse set of task execution times
+        execution_times = [0.5, 1.0, 1.5, 2.0, 2.5, 3.0]
+        
+        for i in range(count):
+            execution_time = execution_times[i % len(execution_times)]
+            # Set generous deadlines to reduce missed deadlines
+            deadline = execution_time * 3.0
+            
+            task = {
+                "task_id": f"T{start_task_id + i}",
+                "execution_time": execution_time,
+                "deadline": deadline,
+                "one_time": True  # Explicitly mark as one-time tasks
+            }
+            task_set["tasks"].append(task)
+        
+        return task_set
 
 
 if __name__ == "__main__":

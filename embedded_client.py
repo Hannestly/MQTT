@@ -60,7 +60,7 @@ class EmbeddedClient:
             self.handle_system_control(data)
 
     def handle_task_assignment(self, data):
-        """Handle new task assignment from broker"""
+        """Handle new task assignment from broker without duplicate detection"""
         task_id = data.get("task_id")
         execution_time = data.get("execution_time", 1)
         deadline = data.get("deadline", 5)
@@ -79,9 +79,9 @@ class EmbeddedClient:
             "algorithm": algorithm,
             "arrival_time": time.time(),
             "assigned_time": data.get("timestamp", time.time()),
-            "load_type": data.get("load_type"),
-            "priority": data.get("priority"),
-            "burst_type": data.get("burst_type")
+            "load_type": data.get("load_type", "unknown"),
+            "priority": data.get("priority", "unknown"),
+            "burst_type": data.get("burst_type", "unknown")
         }
 
         self.task_queue.append(task)
@@ -200,18 +200,29 @@ class EmbeddedClient:
         """Process tasks from the queue"""
         while True:
             if self.task_queue and not self.current_task:
+                # Get the next task (FIFO order)
                 self.current_task = self.task_queue.popleft()
                 self.task_start_time = time.time()
+                self.update_current_load()
 
-                print(f"\n{self.client_id} starting task {self.current_task['task_id']}")
+                # Enhanced task start logging
+                print(f"\n[TASK START] {self.client_id} executing task {self.current_task['task_id']}")
+                print(f"  Algorithm: {self.current_task['algorithm']}")
+                print(f"  Execution time: {self.current_task['execution_time']}")
+                
+                if "load_type" in self.current_task:
+                    print(f"  Load type: {self.current_task['load_type']}")
+                elif "priority" in self.current_task:
+                    print(f"  Priority: {self.current_task['priority']}")
+                elif "burst_type" in self.current_task:
+                    print(f"  Burst type: {self.current_task['burst_type']}")
 
                 # Calculate execution time with random delay
                 base_execution_time = self.current_task["execution_time"]
                 random_delay = random.uniform(0, 1)
                 total_execution_time = base_execution_time + random_delay
 
-                print(f"{self.client_id}: Executing task {self.current_task['task_id']} "
-                      f"for {total_execution_time:.2f}s")
+                print(f"  Total execution time (with delay): {total_execution_time:.2f}s")
                 
                 # Simulate task execution
                 time.sleep(total_execution_time)
@@ -223,6 +234,11 @@ class EmbeddedClient:
                     self.current_task["arrival_time"] + self.current_task["deadline"]
                 )
 
+                # Enhanced completion logging
+                print(f"\n[TASK COMPLETE] {self.client_id} finished task {self.current_task['task_id']}")
+                print(f"  Status: {'completed' if deadline_met else 'missed deadline'}")
+                print(f"  Response time: {response_time:.2f}s")
+                
                 status_msg = {
                     "task_id": self.current_task["task_id"],
                     "worker_id": self.client_id,

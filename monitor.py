@@ -5,6 +5,7 @@ import json
 import matplotlib.pyplot as plt
 from collections import defaultdict
 import numpy as np
+import logging
 
 
 class SystemMonitor:
@@ -16,10 +17,20 @@ class SystemMonitor:
         self.schedule_history = []
         self.worker_status = defaultdict(dict)
         self.worker_history = defaultdict(list)
+        self.batch_submissions = []  # Track batch submissions
+        self.task_sets = defaultdict(list)  # Group tasks by their set
 
         # Setup MQTT callbacks
         self.mqtt_client.on_connect = self.on_connect
         self.mqtt_client.on_message = self.on_message
+
+        # Initialize logger
+        self.logger = logging.getLogger("SystemMonitor")
+        self.logger.setLevel(logging.INFO)
+        handler = logging.StreamHandler()
+        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        handler.setFormatter(formatter)
+        self.logger.addHandler(handler)
 
     def on_connect(self, client, userdata, flags, rc):
         print(f"Monitor connected with result code {rc}")
@@ -27,34 +38,71 @@ class SystemMonitor:
         client.subscribe("task/status")
         client.subscribe("system/schedule_history")
         client.subscribe("worker/+/task_history")
-        client.subscribe("worker/heartbeat")  # New subscription for worker heartbeats
+        client.subscribe("worker/heartbeat")
+        client.subscribe("task/submit")  # Add subscription to track task submissions
 
-    def on_message(self, client, userdata, msg):
-        topic = msg.topic
-        payload = msg.payload.decode()
-
+    def on_message(self, client, userdata, message):
         try:
+            topic = message.topic
+            payload = message.payload.decode()
+
             data = json.loads(payload)
             # Only print non-heartbeat messages
             if topic != "worker/heartbeat":
                 print(f"\nMonitor received message on {topic}:")
-                print(f"  Data: {data}")
-        except json.JSONDecodeError:
-            print(f"Invalid JSON received on {topic}")
-            return
+                if topic != "task/submit":  # Don't print full task submission data
+                    print(f"  Data: {data}")
+                else:
+                    print(f"  Received task submission with {len(data.get('tasks', []))} tasks")
 
-        if topic == "task/status":
-            print(f"Monitor: Recording task completion - Task {data['task_id']}")
-            self.task_history.append(data)
-        elif topic == "system/schedule_history":
-            if isinstance(data, list):
-                self.schedule_history.extend(data)
-        elif topic == "worker/heartbeat":
-            self.update_worker_status(data)  # Still update status but don't print
-        elif topic.startswith("worker/") and topic.endswith("/task_history"):
-            worker_id = topic.split("/")[1]
-            if isinstance(data, list):
-                self.worker_history[worker_id].extend(data)
+            # Process message based on topic
+            if topic == "task/status":
+                self.task_history.append(data)
+                    
+                # Try to identify which task set this belongs to
+                task_id = data.get("task_id")
+                for set_name, tasks in self.task_sets.items():
+                    if task_id in tasks:
+                        data["task_set_name"] = set_name
+                        break
+            
+            elif topic == "system/schedule_history":
+                if isinstance(data, list):
+                    self.schedule_history.extend(data)
+            
+                elif topic == "worker/heartbeat":
+                    self.update_worker_status(data)
+            
+                elif topic.startswith("worker/") and topic.endswith("/task_history"):
+                    worker_id = topic.split("/")[1]
+                if isinstance(data, list):
+                        self.worker_history[worker_id].extend(data)
+            
+                elif topic == "task/submit":
+                    self.logger.info(f"Received task batch: {data}")
+                    # Track batch submissions
+                    if data.get("batch_submission", False):
+                        batch_info = {
+                            "timestamp": data.get("timestamp", time.time()),
+                            "scheduling": data.get("scheduling"),
+                            "task_count": len(data.get("tasks", [])),
+                            "task_ids": [t.get("task_id") for t in data.get("tasks", [])],
+                            "task_set_type": data.get("tasks", [])[0].get("type") if data.get("tasks") else None
+                        }
+                        
+                        # Store task IDs by set type for later reference
+                        set_type = batch_info.get("task_set_type") or "unknown"
+                        scheduling = batch_info.get("scheduling")
+                        set_name = f"{set_type}_{scheduling}"
+                        self.task_sets[set_name] = batch_info["task_ids"]
+                        
+                        self.batch_submissions.append(batch_info)
+                        print(f"  Recorded batch submission: {set_name} with {batch_info['task_count']} tasks")
+        
+        except Exception as e:
+            self.logger.error(f"Error processing message on {topic}: {str(e)}")
+            import traceback
+            self.logger.error(traceback.format_exc())
 
     def update_worker_status(self, data):
         """Update worker status from heartbeat"""
@@ -273,7 +321,7 @@ class SystemMonitor:
         for task in self.task_history:
             alg = task.get("algorithm", "unknown")
             algorithms[alg].append(task["response_time"])
-            
+
             # Calculate deadline margin (deadline - actual_execution_time)
             actual_time = task.get("actual_execution_time", 0)
             deadline = task.get("deadline", 0)
@@ -310,7 +358,7 @@ class SystemMonitor:
 
         plt.figure(figsize=(15, 8))
         colors = {"RM": "blue", "EDF": "green", "RR": "red"}
-        
+
         # Group tasks by algorithm
         alg_tasks = defaultdict(list)
         for task in self.task_history:
@@ -416,6 +464,211 @@ class SystemMonitor:
         plt.tight_layout()
         plt.show()
 
+    def plot_scheduling_timeline(self):
+        """Plot detailed timeline of task scheduling and execution by algorithm"""
+        if not self.task_history:
+            print("No task history to plot")
+            return
+
+        # Group tasks by algorithm and worker
+        task_data = defaultdict(lambda: defaultdict(list))
+        for task in self.task_history:
+            alg = task.get("algorithm", "unknown")
+            worker = task.get("worker_id", "unknown")
+            
+            # Calculate task start and end times
+            start_time = task.get("start_time", 0)
+            # If start_time is not available, estimate from completion time and execution time
+            if start_time == 0 and "timestamp" in task and "actual_execution_time" in task:
+                start_time = task["timestamp"] - task["actual_execution_time"]
+                
+            duration = task.get("actual_execution_time", 0)
+            
+            # Normalize time if we have batch submissions
+            if self.batch_submissions:
+                first_batch = min(sub["timestamp"] for sub in self.batch_submissions)
+                start_time = start_time - first_batch
+            
+            task_data[alg][worker].append({
+                "task_id": task.get("task_id", "unknown"),
+                "start": start_time,
+                "duration": duration,
+                "deadline_met": task.get("status") == "completed",
+                "load_type": task.get("load_type", "unknown"),
+                "priority": task.get("priority", "unknown"),
+                "burst_type": task.get("burst_type", "unknown")
+            })
+
+        # Plot tasks as bars on a timeline
+        plt.figure(figsize=(15, 10))
+        algorithms = list(task_data.keys())
+        colors = {"RM": "blue", "EDF": "green", "RR": "red"}
+        
+        # Calculate number of rows needed (algorithms × workers)
+        row_count = sum(len(workers) for workers in task_data.values())
+        
+        # Setup plot
+        y_position = 0
+        y_ticks = []
+        y_labels = []
+        
+        # Plot tasks by algorithm and worker
+        for alg in algorithms:
+            for worker, tasks in task_data[alg].items():
+                y_ticks.append(y_position + 0.5)
+                y_labels.append(f"{alg} - {worker}")
+                
+                for task in tasks:
+                    # Determine color based on task type and algorithm
+                    base_color = colors.get(alg, "gray")
+                    
+                    # Adjust alpha for deadline status
+                    alpha = 1.0 if task["deadline_met"] else 0.5
+                    
+                    # Plot the task execution bar
+                    bar = plt.barh(y_position, task["duration"], left=task["start"], 
+                                  color=base_color, alpha=alpha)
+                    
+                    # Add task details as text
+                    details = task["task_id"]
+                    if task.get("load_type") != "unknown":
+                        details += f"\n{task['load_type']}"
+                    elif task.get("priority") != "unknown":
+                        details += f"\n{task['priority']}"
+                    elif task.get("burst_type") != "unknown":
+                        details += f"\n{task['burst_type']}"
+                        
+                    plt.text(task["start"], y_position, details, 
+                            verticalalignment='center', fontsize=8)
+                
+                y_position += 1
+
+        # Add submission points
+        for batch in self.batch_submissions:
+            # Normalize time
+            if self.batch_submissions:
+                first_batch = min(sub["timestamp"] for sub in self.batch_submissions)
+                submission_time = batch["timestamp"] - first_batch
+            else:
+                submission_time = 0
+                
+            plt.axvline(x=submission_time, color='black', linestyle='--', 
+                      label=f"Submission: {batch['task_set_type']} - {batch['scheduling']}")
+            plt.text(submission_time, row_count+0.5, 
+                    f"Submit: {batch.get('task_count')} tasks", 
+                    rotation=90, verticalalignment='top')
+
+        plt.yticks(y_ticks, y_labels)
+        plt.xlabel("Time (seconds from first submission)")
+        plt.ylabel("Algorithm - Worker")
+        plt.title("Task Scheduling and Execution Timeline")
+        plt.grid(True, axis='x')
+        
+        # Add legend for deadline status
+        from matplotlib.patches import Patch
+        legend_elements = [
+            Patch(color='gray', alpha=1.0, label='Met Deadline'),
+            Patch(color='gray', alpha=0.5, label='Missed Deadline')
+        ]
+        for alg, color in colors.items():
+            legend_elements.append(Patch(color=color, label=alg))
+            
+        plt.legend(handles=legend_elements, loc='upper right')
+        
+        plt.tight_layout()
+        plt.show()
+
+    def plot_algorithm_comparison(self):
+        """Plot comparative analysis of algorithms across metrics"""
+        if not self.task_history:
+            print("No task history to plot")
+            return
+
+        # Group tasks by algorithm and task type
+        alg_task_data = defaultdict(lambda: defaultdict(list))
+        for task in self.task_history:
+            alg = task.get("algorithm", "unknown")
+            
+            # Determine task type
+            if "load_type" in task:
+                task_type = f"load_{task['load_type']}"
+            elif "priority" in task:
+                task_type = f"priority_{task['priority']}"
+            elif "burst_type" in task:
+                task_type = f"burst_{task['burst_type']}"
+            else:
+                task_type = "unknown"
+                
+            alg_task_data[alg][task_type].append(task)
+
+        # Setup metrics to compare
+        metrics = {
+            "Response Time": lambda t: t.get("response_time", 0),
+            "Execution Time": lambda t: t.get("actual_execution_time", 0),
+            "Deadline Margin": lambda t: t.get("deadline", 0) - t.get("actual_execution_time", 0),
+            "Completion Rate": lambda t: 100 if t.get("status") == "completed" else 0
+        }
+
+        # Create plot
+        fig, axes = plt.subplots(len(metrics), 1, figsize=(12, 4*len(metrics)))
+        
+        for i, (metric_name, metric_func) in enumerate(metrics.items()):
+            ax = axes[i]
+            
+            # Calculate metric values for each algorithm and task type
+            algs = list(alg_task_data.keys())
+            task_types = set()
+            for task_dict in alg_task_data.values():
+                task_types.update(task_dict.keys())
+            task_types = sorted(list(task_types))
+            
+            x = np.arange(len(algs))
+            width = 0.8 / len(task_types)
+            
+            for j, task_type in enumerate(task_types):
+                values = []
+                errors = []
+                
+                for alg in algs:
+                    tasks = alg_task_data[alg][task_type]
+                    if tasks:
+                        if metric_name == "Completion Rate":
+                            # Special case for completion rate
+                            value = sum(metric_func(t) for t in tasks) / len(tasks)
+                            error = 0
+                        else:
+                            # For other metrics, calculate mean and std
+                            metric_values = [metric_func(t) for t in tasks]
+                            value = np.mean(metric_values)
+                            error = np.std(metric_values)
+                        values.append(value)
+                        errors.append(error)
+                    else:
+                        values.append(0)
+                        errors.append(0)
+                
+                # Position the bars for this task type
+                positions = x + (j - len(task_types)/2 + 0.5) * width
+                
+                # Plot with error bars if not completion rate
+                if metric_name == "Completion Rate":
+                    ax.bar(positions, values, width, label=task_type)
+                else:
+                    ax.bar(positions, values, width, yerr=errors, capsize=5, label=task_type)
+            
+            # Set up axis labels and title
+            ax.set_xticks(x)
+            ax.set_xticklabels(algs)
+            ax.set_ylabel(metric_name)
+            ax.set_title(f"{metric_name} by Algorithm and Task Type")
+            
+            # Add legend only on the first subplot to avoid repetition
+            if i == 0:
+                ax.legend(title="Task Type", bbox_to_anchor=(1.05, 1), loc='upper left')
+        
+        plt.tight_layout()
+        plt.show()
+
 
 if __name__ == "__main__":
     monitor = SystemMonitor()
@@ -429,7 +682,9 @@ if __name__ == "__main__":
             print("3. Plot schedule timeline")
             print("4. Plot worker loads")
             print("5. Plot algorithm performance")
-            print("6. Exit")
+            print("6. Plot scheduling timeline (new)")
+            print("7. Plot algorithm comparison (new)")
+            print("8. Exit")
 
             choice = input("Enter choice: ")
 
@@ -444,6 +699,10 @@ if __name__ == "__main__":
             elif choice == "5":
                 monitor.plot_algorithm_performance()
             elif choice == "6":
+                monitor.plot_scheduling_timeline()
+            elif choice == "7":
+                monitor.plot_algorithm_comparison()
+            elif choice == "8":
                 break
             else:
                 print("Invalid choice")
