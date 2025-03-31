@@ -1,4 +1,3 @@
-# task_generator.py
 import paho.mqtt.client as mqtt
 import time
 import json
@@ -25,25 +24,20 @@ class TaskGenerator:
 
     def on_connect(self, client, userdata, flags, rc):
         print(f"Task Generator connected with result code {rc}")
-        # Subscribe to task status updates
         client.subscribe("task/status")
         client.subscribe("task/+/ack")
 
     def on_message(self, client, userdata, msg):
         topic = msg.topic
         payload = msg.payload.decode()
-
         try:
             data = json.loads(payload)
         except json.JSONDecodeError:
             print(f"Invalid JSON received on {topic}")
             return
-
         if topic.startswith("task/") and topic.endswith("/ack"):
-            # Task acknowledgment
             print(f"Task {data['task_id']} acknowledged by broker")
         elif topic == "task/status":
-            # Task status update
             self.results.append(data)
             task_id = data['task_id']
             status = data['status']
@@ -111,7 +105,6 @@ class TaskGenerator:
         print(f"Message {mid} published by Task Generator")
 
     def start(self):
-        """Start the task generator"""
         self.mqtt_client.connect(self.broker_host, self.broker_port)
         print("Task Generator started")
         self.mqtt_client.loop_start()
@@ -178,7 +171,6 @@ class TaskGenerator:
         print(f"  Heavy tasks: {sum(1 for t in unique_tasks if t.get('load_type') == 'heavy')}")
 
     def get_results(self):
-        """Get the task execution results"""
         return self.results
 
     def get_task_set_metrics(self):
