@@ -38,29 +38,38 @@ class TaskScheduler:
         self.worker_loads[worker_id] = task_load
 
     def add_task(self, task):
-        """Add a new task to the scheduler with priority-based load balancing"""
-        # Determine priority based on scheduling algorithm
+        """Add a new task to the scheduler - optimized for EDF"""
         algorithm = task.get("scheduling", "RM")
         
-        if algorithm == "RM":
-            # For RM without periods, use execution time as priority (shorter exec time = higher priority)
-            priority = task.get("execution_time", float('inf'))
-        elif algorithm == "EDF":
-            # For EDF, priority is based on absolute deadline
-            priority = task.get("arrival_time", 0) + task.get("deadline", float('inf'))
-        else:
-            # For RR, priority isn't used
-            priority = 0
-
-        # Get a unique counter value to prevent comparing dictionaries
+        # Get a unique counter
         counter = self.task_counter
         self.task_counter += 1
         
-        # Add task to the priority queue
+        # Set priority based on algorithm
+        if algorithm == "RM":
+            # For RM, priority is based on execution time
+            priority = task.get("execution_time", float('inf'))
+        elif algorithm == "EDF":
+            # For EDF, priority is absolute deadline
+            priority = task.get("arrival_time", 0) + task.get("deadline", float('inf'))
+            # Store the absolute deadline directly in the task for faster access
+            task["abs_deadline"] = priority
+        else:
+            # For RR, all tasks have the same priority
+            priority = 0
+        
+        # Add to priority queue
         heapq.heappush(self.tasks, (priority, counter, task))
         
-        # Log task addition
-        print(f"Added task {task.get('task_id')} to scheduler, assigned to {self.get_least_loaded_worker()}")
+        # Assign worker based on load
+        worker_id = self.get_least_loaded_worker()
+        task["assigned_worker"] = worker_id
+        
+        # Only do minimal logging
+        if algorithm == "EDF":
+            print(f"Added EDF task {task.get('task_id')} (deadline: {task.get('deadline')})")
+        else:
+            print(f"Added task {task.get('task_id')} to {worker_id}")
         
         return task
 
@@ -95,38 +104,56 @@ class TaskScheduler:
         return selected_task[2]  # Return the task
 
     def earliest_deadline_first(self):
-        """Earliest Deadline First scheduling algorithm"""
+        """Simplified and optimized EDF implementation"""
         if not self.tasks:
             return None
 
-        # Find task with earliest absolute deadline
-        current_time = time.time()
-        valid_tasks = []
+        # Track the best task
+        best_task = None
+        best_deadline = float('inf')
+        best_priority = float('inf')
+        best_counter = 0
         
-        # Check all tasks and keep only those that are ready to run
+        # Store tasks that we'll keep
+        keep_tasks = []
+        current_time = time.time()
+        
+        # Extract all tasks once
         while self.tasks:
             priority, counter, task = heapq.heappop(self.tasks)
-            if current_time >= task.get("arrival_time", 0):
-                # Calculate absolute deadline
-                abs_deadline = task.get("arrival_time", 0) + task.get("deadline", float('inf'))
-                if current_time <= abs_deadline:
-                    valid_tasks.append((priority, counter, task))
-                    
-        if not valid_tasks:
-            # Push back tasks and return None if no valid tasks
-            for priority, counter, task in valid_tasks:
-                heapq.heappush(self.tasks, (priority, counter, task))
-            return None
             
-        # Get task with earliest deadline
-        selected_task = min(valid_tasks, key=lambda x: x[0])
-        
-        # Push back unselected tasks
-        for priority, counter, task in valid_tasks:
-            if (priority, counter, task) != selected_task:
-                heapq.heappush(self.tasks, (priority, counter, task))
+            # Skip tasks that aren't ready yet
+            if current_time < task.get("arrival_time", 0):
+                keep_tasks.append((priority, counter, task))
+                continue
+            
+            # Calculate absolute deadline
+            abs_deadline = task.get("arrival_time", 0) + task.get("deadline", float('inf'))
+            
+            # Check if this task has earlier deadline
+            if abs_deadline < best_deadline:
+                # If we already had a best task, add it back to the keep list
+                if best_task:
+                    keep_tasks.append((best_priority, best_counter, best_task))
                 
-        return selected_task[2]  # Return the task, not the priority or counter
+                # Update our tracking of the best task
+                best_task = task
+                best_deadline = abs_deadline
+                best_priority = priority
+                best_counter = counter
+            else:
+                # Not the best, so keep it
+                keep_tasks.append((priority, counter, task))
+        
+        # Put all tasks we're keeping back into the heap
+        for task_item in keep_tasks:
+            heapq.heappush(self.tasks, task_item)
+        
+        # Only do debug logging if we actually found a task
+        if best_task:
+            print(f"[EDF] Selected task {best_task['task_id']} with deadline {best_deadline:.2f}")
+        
+        return best_task
 
     def round_robin(self):
         """Round Robin scheduling algorithm for one-time tasks"""
@@ -413,6 +440,36 @@ class MQTTBroker:
                 print(f"Added task {task_id} to scheduler, assigned to {worker_id}")
                 self.logger.info(f"Added task {task_id} to scheduler")
             
+            # At the end, after processing all tasks, force immediate distribution:
+            if isinstance(data, dict) and 'batch_submission' in data:
+                # Get active workers
+                active_workers = [w_id for w_id, status in self.worker_status.items() 
+                                 if status["active"]]
+                
+                # Distribute initial tasks immediately (one to each worker)
+                worker_index = 0
+                while self.task_scheduler.tasks and worker_index < len(active_workers):
+                    # Take the next task
+                    _, _, task = heapq.heappop(self.task_scheduler.tasks)
+                    worker_id = active_workers[worker_index]
+                    
+                    # Send directly
+                    self.client.publish(
+                        f"worker/{worker_id}/task",
+                        json.dumps({
+                            "task_id": task["task_id"],
+                            "execution_time": task["execution_time"],
+                            "deadline": task["deadline"],
+                            "algorithm": task.get("scheduling", "RM"),
+                            "load_type": task.get("load_type", "unknown"),
+                            "timestamp": time.time()
+                        }),
+                        qos=0
+                    )
+                    
+                    print(f"[IMMEDIATE DISTRIBUTE] Task {task['task_id']} to {worker_id}")
+                    worker_index += 1
+            
         except Exception as e:
             self.logger.error(f"Error handling task submission: {str(e)}")
             import traceback
@@ -450,6 +507,12 @@ class MQTTBroker:
                 self.worker_status[worker_id]["last_seen"] = time.time()
                 self.worker_status[worker_id]["current_load"] = data.get("current_load", 0.0)
                 self.task_scheduler.update_worker_load(worker_id, data.get("current_load", 0.0))
+
+            # At the end, print active workers and their loads
+            print("\n[WORKER STATUS AFTER COMPLETION]")
+            for worker_id, status in self.worker_status.items():
+                if status["active"]:
+                    print(f"  {worker_id}: Load = {status['current_load']:.2f}, Tasks completed = {sum(1 for t in self.task_status.values() if t.get('worker_id') == worker_id)}")
 
     def handle_system_control(self, data):
         """Handle system control commands"""
@@ -494,32 +557,28 @@ class MQTTBroker:
         self.scheduler_thread.daemon = True
         self.scheduler_thread.start()
         
+        # Start the dedicated EDF scheduler
+        self.edf_thread = threading.Thread(target=self.direct_edf_scheduling)
+        self.edf_thread.daemon = True
+        self.edf_thread.start()
+        
         self.logger.info(f"MQTT Broker started on {self.host}:{self.port}")
 
     def run_scheduler(self):
-        """Optimized scheduling loop with load balancing and reduced latency"""
+        """Ensure continuous task assignment without waiting for completion"""
         while True:
             try:
+                # Process as many tasks as possible in each cycle
+                max_assignments_per_cycle = 5  # Assign up to 5 tasks per cycle
+                
                 current_time = time.time()
-                
-                # Only check worker health periodically (every 2 seconds)
-                if not hasattr(self, 'last_health_check') or current_time - self.last_health_check > 2.0:
-                    # Monitor worker health
-                    for worker_id, status in self.worker_status.items():
-                        if status["active"]:
-                            time_since_last_seen = current_time - status["last_seen"]
-                            if time_since_last_seen > self.worker_timeout:
-                                status["active"] = False
-                                print(f"\n[WORKER STATUS] Worker {worker_id} marked as inactive")
-                                print(f"  Last seen: {time_since_last_seen:.1f} seconds ago")
-                    self.last_health_check = current_time
-                
-                # Process tasks immediately if there are active workers
                 active_workers = [w_id for w_id, status in self.worker_status.items() 
-                                if status["active"]]
+                                 if status["active"]]
                 
-                # Fast path processing for tasks
-                if self.task_scheduler.tasks and active_workers:
+                assignments_this_cycle = 0
+                
+                # Assign multiple tasks in a single cycle
+                while self.task_scheduler.tasks and active_workers and assignments_this_cycle < max_assignments_per_cycle:
                     # Get scheduling algorithm from the first task
                     _, _, current_task = self.task_scheduler.tasks[0]
                     algorithm = current_task.get("scheduling", "RM")
@@ -527,52 +586,37 @@ class MQTTBroker:
                     if algorithm in self.task_scheduler.scheduling_algorithms:
                         task = self.task_scheduler.schedule(algorithm)
                         if task:
-                            worker_id = task["assigned_worker"] 
+                            # Get best worker for this task
+                            worker_id = self.get_least_loaded_worker()
+                            task["assigned_worker"] = worker_id
                             
-                            if self.worker_status[worker_id]["active"]:
-                                # Send task to assigned worker without delay
-                                self.client.publish(
-                                    f"worker/{worker_id}/task",
-                                    json.dumps({
-                                        "task_id": task["task_id"],
-                                        "execution_time": task["execution_time"],
-                                        "deadline": task["deadline"],
-                                        "algorithm": task["scheduling"],
-                                        "load_type": task.get("load_type", "unknown"),
-                                        "priority": task.get("priority", "unknown"),
-                                        "burst_type": task.get("burst_type", "unknown"),
-                                        "timestamp": time.time()
-                                    })
-                                )
-                                
-                                # Log only after publishing to reduce latency
-                                print(f"\n[TASK ASSIGNED] Task {task['task_id']} to {worker_id}")
-                            else:
-                                # Try another worker since this one is inactive
-                                alternative_worker = self.get_least_loaded_worker()
-                                task["assigned_worker"] = alternative_worker
-                                
-                                self.client.publish(
-                                    f"worker/{alternative_worker}/task",
-                                    json.dumps({
-                                        "task_id": task["task_id"],
-                                        "execution_time": task["execution_time"],
-                                        "deadline": task["deadline"],
-                                        "algorithm": task["scheduling"],
-                                        "load_type": task.get("load_type", "unknown"),
-                                        "priority": task.get("priority", "unknown"),
-                                        "burst_type": task.get("burst_type", "unknown"),
-                                        "timestamp": time.time()
-                                    })
-                                )
-                                
-                                print(f"\n[TASK REASSIGNED] Task {task['task_id']} to {alternative_worker}")
+                            # Publish task to worker
+                            self.client.publish(
+                                f"worker/{worker_id}/task",
+                                json.dumps({
+                                    "task_id": task["task_id"],
+                                    "execution_time": task["execution_time"],
+                                    "deadline": task["deadline"],
+                                    "algorithm": task["scheduling"],
+                                    "load_type": task.get("load_type", "unknown"),
+                                    "timestamp": time.time()
+                                }),
+                                qos=0
+                            )
+                            
+                            print(f"[PARALLEL ASSIGN] Task {task['task_id']} to {worker_id}")
+                            assignments_this_cycle += 1
+                        else:
+                            break  # No task to schedule
+                    else:
+                        break  # Unknown algorithm
                 
-                # Minimal sleep to yield CPU but not add significant delay
-                time.sleep(0.01)  # 10ms sleep instead of 100ms
+                # Short sleep between cycles
+                time.sleep(0.01)
                 
             except Exception as e:
                 print(f"Error in scheduler: {e}")
+                time.sleep(0.1)
 
     def get_system_status(self):
         """Get current system status including load balancing metrics"""
@@ -589,16 +633,102 @@ class MQTTBroker:
         }
 
     def get_least_loaded_worker(self):
-        """Return the worker with the lowest current load"""
-        active_workers = {w_id: status for w_id, status in self.worker_status.items() 
-                        if status.get("active", False)}
+        """Improved worker assignment to ensure parallelism"""
+        active_workers = {w_id: status["current_load"] 
+                         for w_id, status in self.worker_status.items() 
+                         if status.get("active", False)}
         
         if not active_workers:
             # No active workers, return the first worker
             return next(iter(self.worker_status.keys()))
         
-        # Return the active worker with the lowest load
-        return min(active_workers.items(), key=lambda x: x[1].get("current_load", 0))[0]
+        # Get worker assignment counts for recently assigned tasks
+        recent_assignments = {}
+        for priority, _, task in self.task_scheduler.tasks[:10]:  # Look at last 10 tasks
+            worker = task.get("assigned_worker")
+            if worker:
+                recent_assignments[worker] = recent_assignments.get(worker, 0) + 1
+        
+        # Prioritize workers with fewer recent assignments
+        worker_scores = {}
+        for worker_id, load in active_workers.items():
+            # Score based on load and recent assignments
+            assignment_count = recent_assignments.get(worker_id, 0)
+            worker_scores[worker_id] = load + (assignment_count * 0.5)  # Penalize recent assignments
+        
+        # Return worker with lowest score
+        result = min(worker_scores.items(), key=lambda x: x[1])[0]
+        print(f"[ASSIGNMENT] Selected {result} with score {worker_scores[result]:.2f}")
+        return result
+
+    def direct_edf_scheduling(self):
+        """Completely standalone EDF implementation that bypasses regular scheduling"""
+        while True:
+            try:
+                # Only process if we have tasks and workers
+                if self.task_scheduler.tasks:
+                    current_time = time.time()
+                    active_workers = [w_id for w_id, status in self.worker_status.items() 
+                                    if status["active"]]
+                    
+                    if not active_workers:
+                        time.sleep(0.01)
+                        continue
+                    
+                    # Get all EDF tasks
+                    edf_tasks = []
+                    other_tasks = []
+                    
+                    while self.task_scheduler.tasks:
+                        priority, counter, task = heapq.heappop(self.task_scheduler.tasks)
+                        if task.get("scheduling") == "EDF":
+                            if current_time >= task.get("arrival_time", 0):
+                                edf_tasks.append(task)
+                            else:
+                                other_tasks.append((priority, counter, task))
+                        else:
+                            other_tasks.append((priority, counter, task))
+                    
+                    # Put back non-EDF tasks
+                    for task_tuple in other_tasks:
+                        heapq.heappush(self.task_scheduler.tasks, task_tuple)
+                    
+                    if edf_tasks:
+                        # Sort by absolute deadline
+                        edf_tasks.sort(key=lambda t: t.get("arrival_time", 0) + t.get("deadline", float('inf')))
+                        
+                        # Take the task with earliest absolute deadline
+                        chosen_task = edf_tasks[0]
+                        
+                        # Find best worker (fastest)
+                        best_worker = min([(w_id, self.worker_status[w_id]["current_load"]) 
+                                         for w_id in active_workers], key=lambda x: x[1])[0]
+                        
+                        # Send directly
+                        print(f"[DIRECT EDF] Sending task {chosen_task['task_id']} to {best_worker}")
+                        self.client.publish(
+                            f"worker/{best_worker}/task",
+                            json.dumps({
+                                "task_id": chosen_task["task_id"],
+                                "execution_time": chosen_task["execution_time"],
+                                "deadline": chosen_task["deadline"],
+                                "algorithm": "EDF",
+                                "timestamp": time.time()
+                            }),
+                            qos=0
+                        )
+                        
+                        # Put back other EDF tasks
+                        for task in edf_tasks[1:]:
+                            priority = task.get("arrival_time", 0) + task.get("deadline", float('inf'))
+                            counter = self.task_scheduler.task_counter
+                            self.task_scheduler.task_counter += 1
+                            heapq.heappush(self.task_scheduler.tasks, (priority, counter, task))
+                
+                time.sleep(0.01)
+            except Exception as e:
+                print(f"Direct EDF error: {e}")
+                time.sleep(0.1)
 
 
 if __name__ == "__main__":
@@ -612,4 +742,3 @@ if __name__ == "__main__":
             time.sleep(1)
     except KeyboardInterrupt:
         print("\nShutting down broker...")
-        # Optional: Add any cleanup code here

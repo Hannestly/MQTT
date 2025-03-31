@@ -4,433 +4,282 @@
             "type": "mixed_utilization",
             "tasks": [
                 {
-                    "task_id": "T0",
                     "execution_time": 0.8,
-                    "deadline": 2.4000000000000004,
-                    "load_type": "light"
+                    "deadline": 4.0,
+                    "load_type": "light",
+                    "task_id": "T0"
                 },
                 {
-                    "task_id": "T1",
                     "execution_time": 0.8,
-                    "deadline": 2.4000000000000004,
-                    "load_type": "light"
+                    "deadline": 4.0,
+                    "load_type": "light",
+                    "task_id": "T1"
                 },
                 {
-                    "task_id": "T2",
+                    "execution_time": 3.0,
+                    "deadline": 15.0,
+                    "load_type": "medium",
+                    "task_id": "T2"
+                },
+                {
                     "execution_time": 0.8,
-                    "deadline": 2.4000000000000004,
-                    "load_type": "light"
+                    "deadline": 4.0,
+                    "load_type": "light",
+                    "task_id": "T3"
                 },
                 {
-                    "task_id": "T3",
+                    "execution_time": 6.4,
+                    "deadline": 32.0,
+                    "load_type": "heavy",
+                    "task_id": "T4"
+                },
+                {
+                    "execution_time": 6.4,
+                    "deadline": 32.0,
+                    "load_type": "heavy",
+                    "task_id": "T5"
+                },
+                {
+                    "execution_time": 6.4,
+                    "deadline": 32.0,
+                    "load_type": "heavy",
+                    "task_id": "T6"
+                },
+                {
+                    "execution_time": 3.0,
+                    "deadline": 15.0,
+                    "load_type": "medium",
+                    "task_id": "T7"
+                },
+                {
                     "execution_time": 0.8,
-                    "deadline": 2.4000000000000004,
-                    "load_type": "light"
+                    "deadline": 4.0,
+                    "load_type": "light",
+                    "task_id": "T8"
                 },
                 {
-                    "task_id": "T4",
+                    "execution_time": 6.4,
+                    "deadline": 32.0,
+                    "load_type": "heavy",
+                    "task_id": "T9"
+                },
+                {
+                    "execution_time": 3.0,
+                    "deadline": 15.0,
+                    "load_type": "medium",
+                    "task_id": "T10"
+                },
+                {
                     "execution_time": 0.8,
-                    "deadline": 2.4000000000000004,
-                    "load_type": "light"
+                    "deadline": 4.0,
+                    "load_type": "light",
+                    "task_id": "T11"
                 },
                 {
-                    "task_id": "T5",
+                    "execution_time": 6.4,
+                    "deadline": 32.0,
+                    "load_type": "heavy",
+                    "task_id": "T12"
+                },
+                {
+                    "execution_time": 3.0,
+                    "deadline": 15.0,
+                    "load_type": "medium",
+                    "task_id": "T13"
+                },
+                {
                     "execution_time": 0.8,
-                    "deadline": 2.4000000000000004,
-                    "load_type": "light"
+                    "deadline": 4.0,
+                    "load_type": "light",
+                    "task_id": "T14"
                 },
                 {
-                    "task_id": "T6",
-                    "execution_time": 3.0,
-                    "deadline": 9.0,
-                    "load_type": "medium"
-                },
-                {
-                    "task_id": "T7",
-                    "execution_time": 3.0,
-                    "deadline": 9.0,
-                    "load_type": "medium"
-                },
-                {
-                    "task_id": "T8",
-                    "execution_time": 3.0,
-                    "deadline": 9.0,
-                    "load_type": "medium"
-                },
-                {
-                    "task_id": "T9",
-                    "execution_time": 3.0,
-                    "deadline": 9.0,
-                    "load_type": "medium"
-                },
-                {
-                    "task_id": "T10",
-                    "execution_time": 3.0,
-                    "deadline": 9.0,
-                    "load_type": "medium"
-                },
-                {
-                    "task_id": "T11",
-                    "execution_time": 3.0,
-                    "deadline": 9.0,
-                    "load_type": "medium"
-                },
-                {
-                    "task_id": "T12",
                     "execution_time": 6.4,
-                    "deadline": 19.200000000000003,
-                    "load_type": "heavy"
+                    "deadline": 32.0,
+                    "load_type": "heavy",
+                    "task_id": "T15"
                 },
                 {
-                    "task_id": "T13",
                     "execution_time": 6.4,
-                    "deadline": 19.200000000000003,
-                    "load_type": "heavy"
+                    "deadline": 32.0,
+                    "load_type": "heavy",
+                    "task_id": "T16"
                 },
                 {
-                    "task_id": "T14",
-                    "execution_time": 6.4,
-                    "deadline": 19.200000000000003,
-                    "load_type": "heavy"
+                    "execution_time": 3.0,
+                    "deadline": 15.0,
+                    "load_type": "medium",
+                    "task_id": "T17"
                 },
                 {
-                    "task_id": "T15",
-                    "execution_time": 6.4,
-                    "deadline": 19.200000000000003,
-                    "load_type": "heavy"
+                    "execution_time": 3.0,
+                    "deadline": 15.0,
+                    "load_type": "medium",
+                    "task_id": "T18"
                 },
                 {
-                    "task_id": "T16",
-                    "execution_time": 6.4,
-                    "deadline": 19.200000000000003,
-                    "load_type": "heavy"
+                    "execution_time": 0.8,
+                    "deadline": 4.0,
+                    "load_type": "light",
+                    "task_id": "T19"
                 },
                 {
-                    "task_id": "T17",
-                    "execution_time": 6.4,
-                    "deadline": 19.200000000000003,
-                    "load_type": "heavy"
+                    "execution_time": 3.0,
+                    "deadline": 15.0,
+                    "load_type": "medium",
+                    "task_id": "T20"
                 }
             ]
         },
         {
-            "type": "varying_priority",
+            "type": "deadline_intensity",
             "tasks": [
                 {
-                    "task_id": "T18",
-                    "execution_time": 0.6,
-                    "deadline": 2.0,
-                    "priority": "high"
+                    "execution_time": 2.1723787124770455,
+                    "deadline": 21.723787124770453,
+                    "load_type": "medium",
+                    "deadline_intensity": "moderate",
+                    "task_id": "T21"
                 },
                 {
-                    "task_id": "T19",
-                    "execution_time": 0.6,
-                    "deadline": 2.0,
-                    "priority": "high"
+                    "execution_time": 2.1747792162205877,
+                    "deadline": 32.62168824330882,
+                    "load_type": "light",
+                    "deadline_intensity": "relaxed",
+                    "task_id": "T22"
                 },
                 {
-                    "task_id": "T20",
-                    "execution_time": 0.6,
-                    "deadline": 2.0,
-                    "priority": "high"
+                    "execution_time": 2.1884742823350267,
+                    "deadline": 32.8271142350254,
+                    "load_type": "light",
+                    "deadline_intensity": "relaxed",
+                    "task_id": "T23"
                 },
                 {
-                    "task_id": "T21",
-                    "execution_time": 0.6,
-                    "deadline": 2.0,
-                    "priority": "high"
+                    "execution_time": 1.9832958678399253,
+                    "deadline": 19.83295867839925,
+                    "load_type": "medium",
+                    "deadline_intensity": "moderate",
+                    "task_id": "T24"
                 },
                 {
-                    "task_id": "T22",
-                    "execution_time": 0.6,
-                    "deadline": 2.0,
-                    "priority": "high"
+                    "execution_time": 2.0531181133100214,
+                    "deadline": 20.531181133100212,
+                    "load_type": "medium",
+                    "deadline_intensity": "moderate",
+                    "task_id": "T25"
                 },
                 {
-                    "task_id": "T23",
-                    "execution_time": 0.6,
-                    "deadline": 2.0,
-                    "priority": "high"
+                    "execution_time": 1.8228658749973625,
+                    "deadline": 9.114329374986813,
+                    "load_type": "heavy",
+                    "deadline_intensity": "tight",
+                    "task_id": "T26"
                 },
                 {
-                    "task_id": "T24",
-                    "execution_time": 2.0,
-                    "deadline": 6.0,
-                    "priority": "medium"
+                    "execution_time": 1.8401158326337086,
+                    "deadline": 18.401158326337086,
+                    "load_type": "medium",
+                    "deadline_intensity": "moderate",
+                    "task_id": "T27"
                 },
                 {
-                    "task_id": "T25",
-                    "execution_time": 2.0,
-                    "deadline": 6.0,
-                    "priority": "medium"
+                    "execution_time": 2.09775553151711,
+                    "deadline": 31.466332972756653,
+                    "load_type": "light",
+                    "deadline_intensity": "relaxed",
+                    "task_id": "T28"
                 },
                 {
-                    "task_id": "T26",
-                    "execution_time": 2.0,
-                    "deadline": 6.0,
-                    "priority": "medium"
+                    "execution_time": 2.067809903274999,
+                    "deadline": 31.017148549124983,
+                    "load_type": "light",
+                    "deadline_intensity": "relaxed",
+                    "task_id": "T29"
                 },
                 {
-                    "task_id": "T27",
-                    "execution_time": 2.0,
-                    "deadline": 6.0,
-                    "priority": "medium"
+                    "execution_time": 1.965183079426982,
+                    "deadline": 19.65183079426982,
+                    "load_type": "medium",
+                    "deadline_intensity": "moderate",
+                    "task_id": "T30"
                 },
                 {
-                    "task_id": "T28",
-                    "execution_time": 2.0,
-                    "deadline": 6.0,
-                    "priority": "medium"
+                    "execution_time": 1.861911709237805,
+                    "deadline": 9.309558546189026,
+                    "load_type": "heavy",
+                    "deadline_intensity": "tight",
+                    "task_id": "T31"
                 },
                 {
-                    "task_id": "T29",
-                    "execution_time": 2.0,
-                    "deadline": 6.0,
-                    "priority": "medium"
+                    "execution_time": 1.8564931846361987,
+                    "deadline": 27.84739776954298,
+                    "load_type": "light",
+                    "deadline_intensity": "relaxed",
+                    "task_id": "T32"
                 },
                 {
-                    "task_id": "T30",
-                    "execution_time": 4.0,
-                    "deadline": 14.0,
-                    "priority": "low"
+                    "execution_time": 2.178024501620909,
+                    "deadline": 10.890122508104545,
+                    "load_type": "heavy",
+                    "deadline_intensity": "tight",
+                    "task_id": "T33"
                 },
                 {
-                    "task_id": "T31",
-                    "execution_time": 4.0,
-                    "deadline": 14.0,
-                    "priority": "low"
+                    "execution_time": 2.0003815641532268,
+                    "deadline": 30.005723462298402,
+                    "load_type": "light",
+                    "deadline_intensity": "relaxed",
+                    "task_id": "T34"
                 },
                 {
-                    "task_id": "T32",
-                    "execution_time": 4.0,
-                    "deadline": 14.0,
-                    "priority": "low"
+                    "execution_time": 2.152653307151627,
+                    "deadline": 21.526533071516273,
+                    "load_type": "medium",
+                    "deadline_intensity": "moderate",
+                    "task_id": "T35"
                 },
                 {
-                    "task_id": "T33",
-                    "execution_time": 4.0,
-                    "deadline": 14.0,
-                    "priority": "low"
+                    "execution_time": 2.069610517638012,
+                    "deadline": 10.34805258819006,
+                    "load_type": "heavy",
+                    "deadline_intensity": "tight",
+                    "task_id": "T36"
                 },
                 {
-                    "task_id": "T34",
-                    "execution_time": 4.0,
-                    "deadline": 14.0,
-                    "priority": "low"
+                    "execution_time": 1.952274669643464,
+                    "deadline": 29.28412004465196,
+                    "load_type": "light",
+                    "deadline_intensity": "relaxed",
+                    "task_id": "T37"
                 },
                 {
-                    "task_id": "T35",
-                    "execution_time": 4.0,
-                    "deadline": 14.0,
-                    "priority": "low"
-                }
-            ]
-        },
-        {
-            "type": "burst",
-            "tasks": [
-                {
-                    "task_id": "T36",
-                    "execution_time": 0.5,
-                    "deadline": 2.0,
-                    "burst_type": "rapid"
+                    "execution_time": 1.912501908918726,
+                    "deadline": 9.562509544593631,
+                    "load_type": "heavy",
+                    "deadline_intensity": "tight",
+                    "task_id": "T38"
                 },
                 {
-                    "task_id": "T37",
-                    "execution_time": 0.5,
-                    "deadline": 2.0,
-                    "burst_type": "rapid"
+                    "execution_time": 2.078285032719304,
+                    "deadline": 20.78285032719304,
+                    "load_type": "medium",
+                    "deadline_intensity": "moderate",
+                    "task_id": "T39"
                 },
                 {
-                    "task_id": "T38",
-                    "execution_time": 0.5,
-                    "deadline": 2.0,
-                    "burst_type": "rapid"
+                    "execution_time": 2.1273996272744893,
+                    "deadline": 10.636998136372446,
+                    "load_type": "heavy",
+                    "deadline_intensity": "tight",
+                    "task_id": "T40"
                 },
                 {
-                    "task_id": "T39",
-                    "execution_time": 0.5,
-                    "deadline": 2.0,
-                    "burst_type": "rapid"
-                },
-                {
-                    "task_id": "T40",
-                    "execution_time": 0.5,
-                    "deadline": 2.0,
-                    "burst_type": "rapid"
-                },
-                {
-                    "task_id": "T41",
-                    "execution_time": 0.5,
-                    "deadline": 2.0,
-                    "burst_type": "rapid"
-                },
-                {
-                    "task_id": "T42",
-                    "execution_time": 2.0,
-                    "deadline": 7.0,
-                    "burst_type": "medium"
-                },
-                {
-                    "task_id": "T43",
-                    "execution_time": 2.0,
-                    "deadline": 7.0,
-                    "burst_type": "medium"
-                },
-                {
-                    "task_id": "T44",
-                    "execution_time": 2.0,
-                    "deadline": 7.0,
-                    "burst_type": "medium"
-                },
-                {
-                    "task_id": "T45",
-                    "execution_time": 2.0,
-                    "deadline": 7.0,
-                    "burst_type": "medium"
-                },
-                {
-                    "task_id": "T46",
-                    "execution_time": 2.0,
-                    "deadline": 7.0,
-                    "burst_type": "medium"
-                },
-                {
-                    "task_id": "T47",
-                    "execution_time": 2.0,
-                    "deadline": 7.0,
-                    "burst_type": "medium"
-                },
-                {
-                    "task_id": "T48",
-                    "execution_time": 4.0,
-                    "deadline": 14.0,
-                    "burst_type": "heavy"
-                },
-                {
-                    "task_id": "T49",
-                    "execution_time": 4.0,
-                    "deadline": 14.0,
-                    "burst_type": "heavy"
-                },
-                {
-                    "task_id": "T50",
-                    "execution_time": 4.0,
-                    "deadline": 14.0,
-                    "burst_type": "heavy"
-                },
-                {
-                    "task_id": "T51",
-                    "execution_time": 4.0,
-                    "deadline": 14.0,
-                    "burst_type": "heavy"
-                },
-                {
-                    "task_id": "T52",
-                    "execution_time": 4.0,
-                    "deadline": 14.0,
-                    "burst_type": "heavy"
-                },
-                {
-                    "task_id": "T53",
-                    "execution_time": 4.0,
-                    "deadline": 14.0,
-                    "burst_type": "heavy"
-                }
-            ]
-        },
-        {
-            "type": "diverse_execution",
-            "tasks": [
-                {
-                    "task_id": "T54",
-                    "execution_time": 0.21095266201378304,
-                    "deadline": 0.8209868337766599,
-                    "exec_type": "very_short"
-                },
-                {
-                    "task_id": "T55",
-                    "execution_time": 0.21208852301128245,
-                    "deadline": 0.7998209550565736,
-                    "exec_type": "very_short"
-                },
-                {
-                    "task_id": "T56",
-                    "execution_time": 0.20392541896239927,
-                    "deadline": 0.7616292024046465,
-                    "exec_type": "very_short"
-                },
-                {
-                    "task_id": "T57",
-                    "execution_time": 0.9839401266871866,
-                    "deadline": 3.7754076238680687,
-                    "exec_type": "short"
-                },
-                {
-                    "task_id": "T58",
-                    "execution_time": 1.0097456600001053,
-                    "deadline": 3.630046440771875,
-                    "exec_type": "short"
-                },
-                {
-                    "task_id": "T59",
-                    "execution_time": 1.0046013997140675,
-                    "deadline": 3.4406145725170485,
-                    "exec_type": "short"
-                },
-                {
-                    "task_id": "T60",
-                    "execution_time": 3.037995714297857,
-                    "deadline": 9.199397829809742,
-                    "exec_type": "medium"
-                },
-                {
-                    "task_id": "T61",
-                    "execution_time": 3.0903711395042515,
-                    "deadline": 8.936252213041124,
-                    "exec_type": "medium"
-                },
-                {
-                    "task_id": "T62",
-                    "execution_time": 3.1124460587812792,
-                    "deadline": 9.277107602172606,
-                    "exec_type": "medium"
-                },
-                {
-                    "task_id": "T63",
-                    "execution_time": 4.685095370378917,
-                    "deadline": 15.67789419856047,
-                    "exec_type": "long"
-                },
-                {
-                    "task_id": "T64",
-                    "execution_time": 5.105286266158028,
-                    "deadline": 15.561221304821567,
-                    "exec_type": "long"
-                },
-                {
-                    "task_id": "T65",
-                    "execution_time": 4.56721986624372,
-                    "deadline": 15.022285708223837,
-                    "exec_type": "long"
-                },
-                {
-                    "task_id": "T66",
-                    "execution_time": 7.8528632853470315,
-                    "deadline": 23.170728119509626,
-                    "exec_type": "very_long"
-                },
-                {
-                    "task_id": "T67",
-                    "execution_time": 8.566455288628742,
-                    "deadline": 25.02493395112537,
-                    "exec_type": "very_long"
-                },
-                {
-                    "task_id": "T68",
-                    "execution_time": 7.656773696150647,
-                    "deadline": 23.487937535288257,
-                    "exec_type": "very_long"
+                    "execution_time": 2.1901420151140454,
+                    "deadline": 10.950710075570226,
+                    "load_type": "heavy",
+                    "deadline_intensity": "tight",
+                    "task_id": "T41"
                 }
             ]
         }

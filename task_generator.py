@@ -4,8 +4,6 @@ import time
 import json
 import random
 from threading import Thread
-from collections import defaultdict
-
 
 class TaskGenerator:
     def __init__(self, broker_host="localhost", broker_port=1883):
@@ -13,7 +11,13 @@ class TaskGenerator:
         self.broker_port = broker_port
         self.mqtt_client = mqtt.Client(client_id="task_generator")
         self.results = []
-
+        
+        # Task set tracking
+        self.current_task_set = None
+        self.task_set_metrics = {}
+        self.pending_tasks = set()
+        self.task_deadlines = {}  # Store deadlines for each task
+        
         # Setup MQTT callbacks
         self.mqtt_client.on_connect = self.on_connect
         self.mqtt_client.on_message = self.on_message
@@ -41,7 +45,67 @@ class TaskGenerator:
         elif topic == "task/status":
             # Task status update
             self.results.append(data)
-            print(f"Task {data['task_id']} completed with status {data['status']}")
+            task_id = data['task_id']
+            status = data['status']
+            
+            # Track task completion for the current set
+            if task_id in self.pending_tasks:
+                self.pending_tasks.remove(task_id)
+                
+                # Calculate completion time
+                if self.current_task_set:
+                    set_id = self.current_task_set
+                    if set_id in self.task_set_metrics:
+                        metrics = self.task_set_metrics[set_id]
+                        
+                        # Record individual task completion time
+                        start_time = metrics["start_time"]
+                        completion_time = time.time() - start_time
+                        metrics["task_completion_times"][task_id] = completion_time
+                        
+                        # Check if deadline was met
+                        deadline_met = False
+                        if status == "completed":
+                            # Get the deadline for this task
+                            if task_id in self.task_deadlines:
+                                task_deadline = self.task_deadlines[task_id]
+                                metrics["task_deadlines"][task_id] = task_deadline
+                                
+                                # Task is only counted as completed if it met its deadline
+                                if completion_time <= task_deadline:
+                                    deadline_met = True
+                                    metrics["completed_tasks"] += 1
+                                    print(f"Task {task_id} completed WITHIN deadline ({completion_time:.2f}s <= {task_deadline:.2f}s)")
+                                else:
+                                    metrics["missed_deadlines"] += 1
+                                    print(f"Task {task_id} MISSED deadline ({completion_time:.2f}s > {task_deadline:.2f}s)")
+                        
+                        if status != "completed":
+                            metrics["failed_tasks"] += 1
+                            print(f"Task {task_id} failed with status: {status}")
+                        
+                        # Check if all tasks in the set are processed
+                        if len(self.pending_tasks) == 0:
+                            total_time = time.time() - metrics["start_time"]
+                            metrics["total_completion_time"] = total_time
+                            
+                            # Calculate average completion time for successful tasks
+                            successful_times = [time for task_id, time in metrics["task_completion_times"].items() 
+                                               if task_id in self.task_deadlines and 
+                                               time <= self.task_deadlines[task_id]]
+                            
+                            if successful_times:
+                                avg_time = sum(successful_times) / len(successful_times)
+                                metrics["avg_completion_time"] = avg_time
+                            else:
+                                metrics["avg_completion_time"] = None
+                            
+                            print(f"\n[TASK SET COMPLETED] {metrics['completed_tasks']}/{metrics['total_tasks']} tasks met deadlines")
+                            print(f"Missed deadlines: {metrics['missed_deadlines']}, Failed tasks: {metrics['failed_tasks']}")
+                            if metrics["avg_completion_time"] is not None:
+                                print(f"Total time: {total_time:.2f}s, Average time for successful tasks: {metrics['avg_completion_time']:.2f}s")
+                            else:
+                                print(f"Total time: {total_time:.2f}s, No tasks met deadlines")
 
     def on_publish(self, client, userdata, mid):
         print(f"Message {mid} published by Task Generator")
@@ -50,61 +114,7 @@ class TaskGenerator:
         """Start the task generator"""
         self.mqtt_client.connect(self.broker_host, self.broker_port)
         print("Task Generator started")
-
-        # Start in a separate thread to allow for interactive commands
         self.mqtt_client.loop_start()
-
-    def generate_task_set(self, set_type, client_id, count=5):
-        """Generate a set of tasks with specific characteristics"""
-        tasks = []
-
-        if set_type == 1:  # Harmonic periods
-            periods = [2, 4, 8, 16]
-            for i in range(count):
-                period = random.choice(periods)
-                tasks.append(
-                    {
-                        "task_id": f"T{self.task_counter}",
-                        "client_id": client_id,
-                        "computation_time": random.uniform(0.1, period / 2),
-                        "period": period,
-                        "deadline": period,
-                        "scheduling": "RM",  # Rate Monotonic is best for harmonic tasks
-                    }
-                )
-                self.task_counter += 1
-
-        elif set_type == 2:  # Short deadlines
-            for i in range(count):
-                tasks.append(
-                    {
-                        "task_id": f"T{self.task_counter}",
-                        "client_id": client_id,
-                        "computation_time": random.uniform(0.5, 2),
-                        "period": random.uniform(5, 10),
-                        "deadline": random.uniform(1, 3),  # Tight deadlines
-                        "scheduling": "EDF",  # EDF is best for tight deadlines
-                    }
-                )
-                self.task_counter += 1
-
-        elif set_type == 3:  # Equal periods and computation times
-            period = 5
-            comp_time = 1
-            for i in range(count):
-                tasks.append(
-                    {
-                        "task_id": f"T{self.task_counter}",
-                        "client_id": client_id,
-                        "computation_time": comp_time,
-                        "period": period,
-                        "deadline": period,
-                        "scheduling": "RR",  # Round Robin is fair for equal tasks
-                    }
-                )
-                self.task_counter += 1
-
-        return tasks
 
     def submit_tasks(self, task_set):
         """Submit all tasks simultaneously to test scheduling algorithms"""
@@ -123,15 +133,39 @@ class TaskGenerator:
                 task_ids.add(task_id)
                 task["submission_time"] = current_time
                 unique_tasks.append(task)
+                
+                # Store the deadline for this task
+                deadline = task.get("deadline", float('inf'))
+                self.task_deadlines[task_id] = deadline
             else:
                 print(f"Warning: Skipping duplicate task ID: {task_id}")
         
         # Send all tasks in one batch
         task_data = {
             "scheduling": scheduling,
-            "tasks": unique_tasks,  # Use only unique tasks
+            "tasks": unique_tasks,
             "batch_submission": True,
             "timestamp": current_time
+        }
+        
+        # Setup tracking for this task set
+        set_id = f"{scheduling}_{task_set.get('type', 'unknown')}_{current_time}"
+        self.current_task_set = set_id
+        self.pending_tasks = set(task.get("task_id") for task in unique_tasks)
+        
+        # Initialize metrics for this set
+        self.task_set_metrics[set_id] = {
+            "scheduling": scheduling,
+            "type": task_set.get("type", "unknown"),
+            "start_time": current_time,
+            "total_tasks": len(unique_tasks),
+            "completed_tasks": 0,  # Tasks that met their deadline
+            "missed_deadlines": 0, # Tasks that completed but missed deadline
+            "failed_tasks": 0,     # Tasks that failed to complete
+            "task_completion_times": {},
+            "task_deadlines": {},
+            "total_completion_time": None,
+            "avg_completion_time": None
         }
         
         # Publish the entire batch
@@ -147,63 +181,125 @@ class TaskGenerator:
         """Get the task execution results"""
         return self.results
 
+    def get_task_set_metrics(self):
+        """Get the metrics for completed task sets"""
+        return self.task_set_metrics
+
     def analyze_results(self):
-        """Analyze the task execution results with load balancing metrics"""
+        """Analyze the task execution results with focus on deadline adherence"""
         if not self.results:
             print("No results to analyze")
             return
 
-        total_tasks = len(self.results)
-        completed = sum(1 for r in self.results if r["status"] == "completed")
-        missed = total_tasks - completed
-        avg_response = sum(r["response_time"] for r in self.results) / total_tasks
-
-        print("\n=== Results Analysis ===")
-        print(f"Total tasks: {total_tasks}")
-        print(f"Completed on time: {completed} ({completed/total_tasks*100:.1f}%)")
-        print(f"Missed deadlines: {missed} ({missed/total_tasks*100:.1f}%)")
-        print(f"Average response time: {avg_response:.2f} seconds")
-
-        # Group by algorithm and analyze load distribution
-        algorithms = {}
-        for r in self.results:
-            alg = r.get("algorithm", "unknown")
-            if alg not in algorithms:
-                algorithms[alg] = {
-                    "tasks": [],
-                    "execution_times": [],
-                    "response_times": [],
-                    "load_types": defaultdict(int)
-                }
-            algorithms[alg]["tasks"].append(r)
-            algorithms[alg]["execution_times"].append(r.get("actual_execution_time", 0))
-            algorithms[alg]["response_times"].append(r["response_time"])
+        # Task set metrics with deadline information
+        print("\n=== Task Set Performance ===")
+        for set_id, metrics in self.task_set_metrics.items():
+            scheduling = metrics["scheduling"]
+            set_type = metrics["type"]
+            total_tasks = metrics["total_tasks"]
+            completed_tasks = metrics["completed_tasks"]
+            missed_deadlines = metrics["missed_deadlines"]
+            failed_tasks = metrics["failed_tasks"]
             
-            # Track load types if available
-            if "load_type" in r:
-                algorithms[alg]["load_types"][r["load_type"]] += 1
-            elif "priority" in r:
-                algorithms[alg]["load_types"][r["priority"]] += 1
-            elif "burst_type" in r:
-                algorithms[alg]["load_types"][r["burst_type"]] += 1
+            deadline_met_ratio = completed_tasks / total_tasks * 100 if total_tasks > 0 else 0
+            
+            print(f"\nTask Set: {set_type} with {scheduling}")
+            print(f"  Total tasks: {total_tasks}")
+            print(f"  Met deadlines: {completed_tasks} ({deadline_met_ratio:.1f}%)")
+            
+            if total_tasks > 0:
+                missed_pct = missed_deadlines / total_tasks * 100
+                failed_pct = failed_tasks / total_tasks * 100
+                print(f"  Missed deadlines: {missed_deadlines} ({missed_pct:.1f}%)")
+                print(f"  Failed tasks: {failed_tasks} ({failed_pct:.1f}%)")
+            
+            if metrics["total_completion_time"] is not None:
+                print(f"  Total time: {metrics['total_completion_time']:.2f}s")
+                
+                if metrics["avg_completion_time"] is not None:
+                    print(f"  Average time for tasks meeting deadlines: {metrics['avg_completion_time']:.2f}s")
+                else:
+                    print("  No tasks met their deadlines")
+                
+                # Calculate min and max task completion times for successful tasks
+                successful_times = {task_id: time for task_id, time in metrics["task_completion_times"].items() 
+                                  if task_id in metrics["task_deadlines"] and 
+                                  time <= metrics["task_deadlines"][task_id]}
+                
+                if successful_times:
+                    min_time = min(successful_times.values())
+                    max_time = max(successful_times.values())
+                    print(f"  Fastest successful task: {min_time:.2f}s")
+                    print(f"  Slowest successful task: {max_time:.2f}s")
+                
+                # Group by load type with deadline information
+                load_types = {}
+                for task_id, completion_time in metrics["task_completion_times"].items():
+                    # Find the task in results to get its load type
+                    for result in self.results:
+                        if result["task_id"] == task_id:
+                            load_type = result.get("load_type", "unknown")
+                            deadline_met = task_id in metrics["task_deadlines"] and completion_time <= metrics["task_deadlines"][task_id]
+                            
+                            if load_type not in load_types:
+                                load_types[load_type] = {"met": [], "missed": []}
+                            
+                            if deadline_met:
+                                load_types[load_type]["met"].append(completion_time)
+                            else:
+                                load_types[load_type]["missed"].append(completion_time)
+                            break
+                
+                # Print statistics by load type
+                if load_types:
+                    print("  Performance by load type:")
+                    for load_type, times in load_types.items():
+                        met_count = len(times["met"])
+                        missed_count = len(times["missed"])
+                        total = met_count + missed_count
+                        
+                        if total > 0:
+                            met_ratio = met_count / total * 100
+                            print(f"    {load_type}: {met_count}/{total} met deadlines ({met_ratio:.1f}%)")
+                            
+                            if met_count > 0:
+                                avg_met = sum(times["met"]) / met_count
+                                print(f"      Average time when meeting deadlines: {avg_met:.2f}s")
+                            
+                            if missed_count > 0:
+                                avg_missed = sum(times["missed"]) / missed_count
+                                print(f"      Average time when missing deadlines: {avg_missed:.2f}s")
 
-        # Print detailed analysis for each algorithm
-        for alg, data in algorithms.items():
-            tasks = data["tasks"]
-            total = len(tasks)
-            completed = sum(1 for t in tasks if t["status"] == "completed")
-            
-            print(f"\nAlgorithm {alg}:")
-            print(f"  Tasks: {total}")
-            print(f"  Completion rate: {completed/total*100:.1f}%")
-            print(f"  Avg response: {sum(data['response_times'])/total:.2f}s")
-            print(f"  Avg execution: {sum(data['execution_times'])/total:.2f}s")
-            
-            # Print load distribution
-            if data["load_types"]:
-                print("  Load distribution:")
-                for load_type, count in data["load_types"].items():
-                    print(f"    {load_type}: {count} tasks ({count/total*100:.1f}%)")
+            # Add additional analysis based on task set type
+            if set_type == "deadline_intensity":
+                self._analyze_deadline_intensity_results(metrics)
+
+    def _analyze_deadline_intensity_results(self, metrics):
+        """Analyze results specifically for deadline intensity task sets"""
+        print("\n  Deadline intensity performance:")
+        
+        intensity_stats = {"tight": {"met": 0, "total": 0}, 
+                          "moderate": {"met": 0, "total": 0}, 
+                          "relaxed": {"met": 0, "total": 0}}
+        
+        # Collect statistics by deadline intensity
+        for task_id, completion_time in metrics["task_completion_times"].items():
+            for result in self.results:
+                if result["task_id"] == task_id and "deadline_intensity" in result:
+                    intensity = result.get("deadline_intensity", "unknown")
+                    deadline_met = task_id in metrics["task_deadlines"] and completion_time <= metrics["task_deadlines"][task_id]
+                    
+                    if intensity in intensity_stats:
+                        intensity_stats[intensity]["total"] += 1
+                        if deadline_met:
+                            intensity_stats[intensity]["met"] += 1
+                    break
+        
+        # Report results by deadline intensity
+        for intensity, stats in intensity_stats.items():
+            if stats["total"] > 0:
+                success_rate = (stats["met"] / stats["total"]) * 100
+                print(f"    {intensity.capitalize()} deadlines: {stats['met']}/{stats['total']} met ({success_rate:.1f}%)")
 
     def load_task_sets(self, filename="task_sets.json"):
         """Load task sets from JSON file"""
@@ -217,78 +313,6 @@ class TaskGenerator:
         except json.JSONDecodeError:
             print(f"Error: {filename} contains invalid JSON")
             return None
-
-    def get_task_set_type_name(self, set_type):
-        """Convert set type number to corresponding JSON key"""
-        type_mapping = {
-            1: "harmonic_sets",
-            2: "tight_deadline_sets",
-            3: "equal_period_sets"
-        }
-        return type_mapping.get(set_type)
-
-    def generate_mixed_utilization_set(self, count=18, start_task_id=0):
-        """
-        Generate tasks with mixed utilization levels for one-time execution.
-        Removed period field as it's not needed for one-time tasks.
-        """
-        task_set = {
-            "type": "mixed_utilization",
-            "tasks": []
-        }
-        
-        # Define execution time patterns for different load types
-        execution_patterns = [
-            (0.8, "light"),    # Light load: 0.8s execution time
-            (3.0, "medium"),   # Medium load: 3.0s execution time
-            (6.4, "heavy")     # Heavy load: 6.4s execution time
-        ]
-        
-        tasks_per_pattern = count // len(execution_patterns)
-        
-        for pattern_idx, (execution_time, load_type) in enumerate(execution_patterns):
-            for i in range(tasks_per_pattern):
-                # Calculate a reasonable deadline based on execution time
-                deadline = execution_time * 1.5  # 50% margin
-                
-                task = {
-                    "task_id": f"T{start_task_id + pattern_idx * tasks_per_pattern + i}",
-                    "execution_time": execution_time,
-                    "deadline": deadline,
-                    "load_type": load_type
-                }
-                task_set["tasks"].append(task)
-        
-        return task_set
-
-    def generate_rr_task_set(self, count=9, start_task_id=0):
-        """
-        Generate tasks specifically for Round Robin scheduling.
-        Each task should be executed only once.
-        """
-        task_set = {
-            "type": "round_robin",
-            "scheduling": "RR",
-            "tasks": []
-        }
-        
-        # Create a diverse set of task execution times
-        execution_times = [0.5, 1.0, 1.5, 2.0, 2.5, 3.0]
-        
-        for i in range(count):
-            execution_time = execution_times[i % len(execution_times)]
-            # Set generous deadlines to reduce missed deadlines
-            deadline = execution_time * 3.0
-            
-            task = {
-                "task_id": f"T{start_task_id + i}",
-                "execution_time": execution_time,
-                "deadline": deadline,
-                "one_time": True  # Explicitly mark as one-time tasks
-            }
-            task_set["tasks"].append(task)
-        
-        return task_set
 
 
 if __name__ == "__main__":
@@ -325,11 +349,10 @@ if __name__ == "__main__":
 
             print("\nTask Set Types:")
             print("1. Mixed Utilization")
-            print("2. Varying Priority")
-            print("3. Burst")
+            print("2. Deadline Intensity")
 
             set_type = input("Enter task set type: ")
-            if set_type not in ["1", "2", "3"]:
+            if set_type not in ["1", "2"]:
                 print("Invalid task set type")
                 continue
 
